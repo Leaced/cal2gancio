@@ -1,20 +1,16 @@
 name: _build-scan (reusable)
 
-# Called by ci.yml. Builds a single-arch image, pushes it, then runs Trivy.
+# Called by ci.yml. Computes image tags, builds a single-arch OCI image,
+# pushes it to ghcr.io, then runs Trivy.
 # Pipeline fails on CRITICAL or HIGH vulnerabilities where a fix is available
 # (--ignore-unfixed skips issues with no upstream patch yet).
 
 on:
   workflow_call:
-    inputs:
-      tags:
-        description: "Image tags to build and push (one per line)"
-        required: true
-        type: string
+    outputs:
       scan-ref:
-        description: "Full image reference used for the Trivy scan"
-        required: true
-        type: string
+        description: "Full image reference that was built and pushed"
+        value: ${{ jobs.build-push-scan.outputs.scan-ref }}
 
 jobs:
   build-push-scan:
@@ -24,8 +20,31 @@ jobs:
       packages: write
       security-events: write
       actions: read            # codeql-action/upload-sarif needs this for workflow metadata
+    outputs:
+      scan-ref: ${{ steps.tags.outputs.scan-ref }}
 
     steps:
+      - name: Compute image tags
+        id: tags
+        run: |
+          SHA="${GITHUB_SHA::8}"
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            SCAN_REF="${IMAGE}:pr-${{ github.event.number }}-${SHA}"
+            TAGS="${SCAN_REF}"
+          else
+            SCAN_REF="${IMAGE}:main-${SHA}"
+            TAGS="${SCAN_REF}"$'\n'"${IMAGE}:main"
+          fi
+
+          echo "scan-ref=${SCAN_REF}" >> "$GITHUB_OUTPUT"
+          {
+            echo "tags<<EOF"
+            echo "${TAGS}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -33,7 +52,7 @@ jobs:
         id: build
         uses: redhat-actions/buildah-build@v2.13
         with:
-          tags:           ${{ inputs.tags }}
+          tags:           ${{ steps.tags.outputs.tags }}
           platforms:      linux/amd64
           containerfiles: ./Containerfile
           oci:            true
@@ -45,10 +64,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Trivy vulnerability scan
+      - name: Trivy vulnerability scan (SARIF)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref:      ${{ inputs.scan-ref }}
+          image-ref:      ${{ steps.tags.outputs.scan-ref }}
           format:         sarif
           output:         trivy-results.sarif
           ignore-unfixed: true
@@ -67,7 +86,7 @@ jobs:
       - name: Fail on fixable CRITICAL/HIGH vulnerabilities
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref:      ${{ inputs.scan-ref }}
+          image-ref:      ${{ steps.tags.outputs.scan-ref }}
           format:         table
           exit-code:      "1"
           ignore-unfixed: true

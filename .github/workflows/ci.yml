@@ -3,8 +3,20 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'config.yml'
+      - '.github/**'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'config.yml'
+      - '.github/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Permissions needed across all jobs.
 # Kept broad at the top level so the GITHUB_TOKEN passed to the reusable
@@ -19,47 +31,14 @@ permissions:
   actions: read          # codeql-action/upload-sarif: workflow metadata access
 
 jobs:
-  # ── 1. Compute image tags based on event type ─────────────────────────────
-  prepare:
-    runs-on: ubuntu-24.04
-    outputs:
-      tags:     ${{ steps.compute.outputs.tags }}
-      scan-ref: ${{ steps.compute.outputs.scan-ref }}
-    steps:
-      - name: Compute image tags
-        id: compute
-        run: |
-          SHA="${GITHUB_SHA::8}"
-          IMAGE="ghcr.io/${{ github.repository }}"
-          IMAGE="${IMAGE,,}"   # OCI requires lowercase
-
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            SCAN_REF="${IMAGE}:pr-${{ github.event.number }}-${SHA}"
-            TAGS="${SCAN_REF}"
-          else
-            SCAN_REF="${IMAGE}:main-${SHA}"
-            TAGS="${SCAN_REF}"$'\n'"${IMAGE}:main"
-          fi
-
-          echo "scan-ref=${SCAN_REF}" >> "$GITHUB_OUTPUT"
-          {
-            echo "tags<<EOF"
-            echo "${TAGS}"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-  # ── 2. Build, push, scan (reusable) ─────────────────────────────────────
+  # ── 1. Build, push, scan (reusable) ──────────────────────────────────────
   build-push-scan:
-    needs: prepare
     uses: ./.github/workflows/_build-scan.yml
-    with:
-      tags:     ${{ needs.prepare.outputs.tags }}
-      scan-ref: ${{ needs.prepare.outputs.scan-ref }}
     secrets: inherit
 
-  # ── 3. Semantic release + image tagging ─────────────────────────────────
+  # ── 2. Semantic release + image tagging ──────────────────────────────────
   release:
-    needs: [prepare, build-push-scan]
+    needs: [build-push-scan]
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout (full history for semantic-release)
@@ -84,7 +63,7 @@ jobs:
       - name: Tag release image (vX.X.X + latest)
         if: steps.semantic.outputs.new_release_published == 'true'
         env:
-          SRC:     ${{ needs.prepare.outputs.scan-ref }}
+          SRC:     ${{ needs.build-push-scan.outputs.scan-ref }}
           VERSION: ${{ steps.semantic.outputs.new_release_version }}
           IMAGE:   ghcr.io/${{ github.repository }}
         run: |
