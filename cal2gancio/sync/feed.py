@@ -2,7 +2,7 @@
 
 from ..config      import AppConfig, FeedConfig
 from ..gancio      import GancioClient, get_token
-from ..ical        import fetch_events
+from ..sources     import fetch_for_feed
 from .decision     import sync_event
 
 _ICONS = {"erstellt": "✓", "aktualisiert": "✓", "unverändert": "="}
@@ -10,7 +10,7 @@ _ICONS = {"erstellt": "✓", "aktualisiert": "✓", "unverändert": "="}
 
 def sync_feed(feed: FeedConfig, client: GancioClient, disclaimer: str = "") -> None:
     print(f"\n→ {feed.url}")
-    events = fetch_events(feed, disclaimer)
+    events = fetch_for_feed(feed, disclaimer)
 
     if not events:
         print("  (keine Events oder Abruf fehlgeschlagen)")
