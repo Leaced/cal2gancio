@@ -2,9 +2,12 @@
 config.py – Load and validate /opt/cal2gancio/config.yml.
 
 Config file structure:
-    gancio_url: https://demo.gancio.org
-    username: admin@example.org
-    password_file: /run/secrets/gancio_password
+    gancio:
+      url: https://demo.gancio.org
+      username: admin@example.org       # optional, omit for anonymous posting
+      password_file: /run/secrets/gancio_password  # optional
+      wait: 2.0                         # seconds between writes, default 0
+
     disclaimer: "Imported via [cal2gancio](https://github.com/leaced/cal2gancio)."  # optional
 
     ical_urls:
@@ -44,6 +47,7 @@ class AppConfig:
     gancio_url: str
     username: str
     password: str
+    request_delay: float
     disclaimer: str
     feeds: list[FeedConfig]
 
@@ -56,20 +60,26 @@ def load() -> AppConfig:
     with CONFIG_PATH.open() as f:
         raw = yaml.safe_load(f)
 
-    required = ["gancio_url", "ical_urls"]
-    missing = [k for k in required if not raw.get(k)]
-    if missing:
-        print(f"Error: missing config keys: {', '.join(missing)}", file=sys.stderr)
+    gancio = raw.get("gancio") or {}
+    gancio_url = (gancio.get("url") or "").rstrip("/")
+    if not gancio_url:
+        print("Error: missing gancio.url", file=sys.stderr)
         sys.exit(1)
 
-    username = raw.get("username") or ""
+    if not raw.get("ical_urls"):
+        print("Error: missing ical_urls", file=sys.stderr)
+        sys.exit(1)
+
+    username = gancio.get("username") or ""
     password = ""
     if username:
         try:
-            password = Path(raw.get("password_file", "/run/secrets/gancio_password")).read_text().strip()
+            password = Path(gancio.get("password_file", "/run/secrets/gancio_password")).read_text().strip()
         except OSError as e:
             print(f"Error reading password file: {e}", file=sys.stderr)
             sys.exit(1)
+
+    request_delay = float(gancio.get("wait", 0.0))
 
     feeds = [
         FeedConfig(
@@ -83,9 +93,10 @@ def load() -> AppConfig:
     ]
 
     return AppConfig(
-        gancio_url=raw["gancio_url"].rstrip("/"),
+        gancio_url=gancio_url,
         username=username,
         password=password,
+        request_delay=request_delay,
         disclaimer=raw.get("disclaimer", ""),
         feeds=feeds,
     )

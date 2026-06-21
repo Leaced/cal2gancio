@@ -35,7 +35,7 @@ def sync_feed(feed: FeedConfig, client: GancioClient, disclaimer: str = "") -> N
 
 def sync_all(cfg: AppConfig) -> None:
     token  = get_token(cfg.gancio_url, cfg.username, cfg.password) if cfg.username else None
-    client = GancioClient(cfg.gancio_url, token)
+    client = GancioClient(cfg.gancio_url, token, request_delay=cfg.request_delay)
 
     if cfg.username:
         print(f"Angemeldet als {cfg.username} @ {cfg.gancio_url}")

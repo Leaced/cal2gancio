@@ -6,6 +6,7 @@ GancioClient – wraps the three API operations used by the sync:
   update_event(gancio_id, event) PUT  /api/event
 """
 
+import time
 import urllib.parse
 
 import requests
@@ -14,9 +15,10 @@ from .encoding import ApiResult, strip_meta, to_multipart
 
 
 class GancioClient:
-    def __init__(self, base_url: str, token: str | None) -> None:
+    def __init__(self, base_url: str, token: str | None, request_delay: float = 0.0) -> None:
         self._base    = _resolve_base_url(base_url)
         self._headers = {"Authorization": f"Bearer {token}"} if token else {}
+        self._delay   = request_delay
 
     # ── Lookup ────────────────────────────────────────────────────────────
 
@@ -44,16 +46,17 @@ class GancioClient:
 
     def create_event(self, event: dict) -> ApiResult:
         """POST /api/event – create a new event."""
-        try:
-            resp = requests.post(
+        files = to_multipart(strip_meta(event))
+        resp, err = self._write(
+            lambda: requests.post(
                 f"{self._base}/api/event",
-                files=to_multipart(strip_meta(event)),
+                files=files,
                 headers=self._headers,
                 timeout=20,
             )
-        except requests.RequestException as e:
-            return ApiResult(success=False, gancio_id=None, error=str(e))
-
+        )
+        if err:
+            return ApiResult(success=False, gancio_id=None, error=err)
         if resp.status_code in (200, 201):
             return ApiResult(success=True, gancio_id=_extract_id(resp))
         return ApiResult(
@@ -66,24 +69,47 @@ class GancioClient:
         PUT /api/event – update an existing event.
         Sends the full tag list, so stale internal tags are naturally replaced.
         """
-        payload      = strip_meta(event)
+        payload = strip_meta(event)
         payload["id"] = gancio_id
-        try:
-            resp = requests.put(
+        files = to_multipart(payload)
+        resp, err = self._write(
+            lambda: requests.put(
                 f"{self._base}/api/event",
-                files=to_multipart(payload),
+                files=files,
                 headers=self._headers,
                 timeout=20,
             )
-        except requests.RequestException as e:
-            return ApiResult(success=False, gancio_id=gancio_id, error=str(e))
-
+        )
+        if err:
+            return ApiResult(success=False, gancio_id=gancio_id, error=err)
         if resp.status_code in (200, 201):
             return ApiResult(success=True, gancio_id=gancio_id)
         return ApiResult(
             success=False, gancio_id=gancio_id,
             error=f"HTTP {resp.status_code}: {resp.text[:200]}",
         )
+
+    # ── Internal ──────────────────────────────────────────────────────────
+
+    def _write(self, req_fn) -> tuple[requests.Response | None, str | None]:
+        """Execute a write request, retry once on 429, then apply the configured delay."""
+        try:
+            resp = req_fn()
+        except requests.RequestException as e:
+            return None, str(e)
+
+        if resp.status_code == 429:
+            retry_after = float(resp.headers.get("Retry-After", max(self._delay, 5.0)))
+            time.sleep(retry_after)
+            try:
+                resp = req_fn()
+            except requests.RequestException as e:
+                return None, str(e)
+
+        if self._delay > 0:
+            time.sleep(self._delay)
+
+        return resp, None
 
 
 # ---------------------------------------------------------------------------

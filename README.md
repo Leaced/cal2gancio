@@ -20,9 +20,12 @@ Synchronizes one or more iCal feeds to a [Gancio](https://gancio.org) instance.
 Place a `config.yml` at `/opt/cal2gancio/config.yml`:
 
 ```yaml
-gancio_url: https://your-gancio-instance.org
-username: admin@example.org
-password_file: /run/secrets/gancio_password   # file containing the password
+gancio:
+  url: https://your-gancio-instance.org
+  username: admin@example.org             # omit for anonymous posting
+  password_file: /run/secrets/gancio_password  # default, ignored without username
+  wait: 2.0                               # seconds between writes (default: 0)
+
 disclaimer: "Veranstaltungshinweis: [Veranstalter XY](https://example.org) – importiert via cal2gancio."  # optional
 
 ical_urls:
@@ -37,13 +40,21 @@ ical_urls:
     # No defaults needed if the feed contains LOCATION fields
 ```
 
+### `gancio:` section
+
 | Key             | Required | Description                                                         |
 | --------------- | -------- | ------------------------------------------------------------------- |
-| `gancio_url`    | ✓        | Base URL of the Gancio instance                                     |
-| `username`      | –        | Login e-mail / username; omit for anonymous posting (if the instance allows it) |
-| `password_file` | –        | Path to a file containing the password (default: `/run/secrets/gancio_password`); ignored when `username` is absent |
-| `ical_urls`     | ✓        | List of feeds (see below)                                           |
-| `disclaimer`    | –        | Text appended to every event description (Markdown links supported) |
+| `url`           | ✓        | Base URL of the Gancio instance (redirects are followed automatically) |
+| `username`      | –        | Login e-mail; omit for anonymous posting (if the instance allows it) |
+| `password_file` | –        | Path to a file containing the password (default: `/run/secrets/gancio_password`) |
+| `wait`          | –        | Seconds to wait between write requests; use when hitting HTTP 429 (default: `0`) |
+
+### Top-level keys
+
+| Key          | Required | Description                                                         |
+| ------------ | -------- | ------------------------------------------------------------------- |
+| `ical_urls`  | ✓        | List of feeds (see below)                                           |
+| `disclaimer` | –        | Text appended to every event description (Markdown links supported) |
 
 Per feed:
 
