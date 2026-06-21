@@ -16,6 +16,7 @@ permissions:
   issues: write          # semantic-release: close referenced issues
   pull-requests: write   # semantic-release: comment on PRs
   security-events: write # trivy: upload SARIF to GitHub Security tab
+  actions: read          # codeql-action/upload-sarif: workflow metadata access
 
 jobs:
   # ── 1. Compute image tags based on event type ─────────────────────────────

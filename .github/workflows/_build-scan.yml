@@ -22,7 +22,8 @@ jobs:
     permissions:
       contents: read
       packages: write
-      security-events: write   # upload SARIF to GitHub Security tab
+      security-events: write
+      actions: read            # codeql-action/upload-sarif needs this for workflow metadata
 
     steps:
       - name: Checkout
@@ -58,7 +59,7 @@ jobs:
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: trivy-results.sarif
