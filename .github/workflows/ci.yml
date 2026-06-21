@@ -69,7 +69,7 @@ jobs:
 
       - name: Semantic Release
         id: semantic
-        uses: cycjimmy/semantic-release-action@v4
+        uses: cycjimmy/semantic-release-action@v6.0.0
         with:
           # On PR: dry-run previews the next version without publishing.
           # On main: creates the GitHub release and git tag.
