@@ -51,7 +51,11 @@ def build_event(component, feed: FeedConfig, disclaimer: str = "") -> dict | Non
 
     description = str(component.get("DESCRIPTION", "")).strip()
     if disclaimer:
-        description = f"{description}\n\n{_md_links_to_html(disclaimer)}".strip()
+        html_disclaimer = f"<em>{_md_links_to_html(disclaimer)}</em>"
+        if description:
+            description = f"{description}\n\n<hr>\n\n{html_disclaimer}"
+        else:
+            description = html_disclaimer
 
     event: dict = {
         "title":          title,
