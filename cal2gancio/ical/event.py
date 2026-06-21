@@ -9,18 +9,12 @@ The returned dict contains:
       _uid_is_real  False if the UID was generated from title+timestamp
 """
 
-import re
-
 from ..config import FeedConfig
 from .location   import parse_location, parse_geo
 from .media      import parse_image_url
 from .recurrence import parse_recurrent
 from .tags       import parse_categories, uid_tag, hash_tag, content_hash
 from .timestamps import to_timestamp
-
-
-def _md_links_to_html(text: str) -> str:
-    return re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', text)
 
 
 def build_event(component, feed: FeedConfig, disclaimer: str = "") -> dict | None:
@@ -51,11 +45,10 @@ def build_event(component, feed: FeedConfig, disclaimer: str = "") -> dict | Non
 
     description = str(component.get("DESCRIPTION", "")).strip()
     if disclaimer:
-        html_disclaimer = f"<em>{_md_links_to_html(disclaimer)}</em>"
         if description:
-            description = f"{description}\n\n<hr>\n\n{html_disclaimer}"
+            description = f"{description}\n\n<hr>\n\n{disclaimer}"
         else:
-            description = html_disclaimer
+            description = disclaimer
 
     event: dict = {
         "title":          title,

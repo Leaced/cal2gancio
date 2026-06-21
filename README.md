@@ -26,7 +26,7 @@ gancio:
   password_file: /run/secrets/gancio_password  # default, ignored without username
   wait: 2.0                               # seconds between writes (default: 0)
 
-disclaimer: "Veranstaltungshinweis: [Veranstalter XY](https://example.org) – importiert via cal2gancio."  # optional
+disclaimer: "Quelle: <a href=\"https://example.org\">Veranstalter XY</a> – importiert via cal2gancio.<br><i>Keine Gewähr für Vollständigkeit.</i>"  # optional
 
 ical_urls:
   - url: https://example.org/events/?ical=1
@@ -42,19 +42,29 @@ ical_urls:
 
 ### `gancio:` section
 
-| Key             | Required | Description                                                         |
-| --------------- | -------- | ------------------------------------------------------------------- |
-| `url`           | ✓        | Base URL of the Gancio instance (redirects are followed automatically) |
-| `username`      | –        | Login e-mail; omit for anonymous posting (if the instance allows it) |
+| Key             | Required | Description                                                                      |
+| --------------- | -------- | -------------------------------------------------------------------------------- |
+| `url`           | ✓        | Base URL of the Gancio instance (redirects are followed automatically)           |
+| `username`      | –        | Login e-mail; omit for anonymous posting (if the instance allows it)             |
 | `password_file` | –        | Path to a file containing the password (default: `/run/secrets/gancio_password`) |
 | `wait`          | –        | Seconds to wait between write requests; use when hitting HTTP 429 (default: `0`) |
 
 ### Top-level keys
 
-| Key          | Required | Description                                                         |
-| ------------ | -------- | ------------------------------------------------------------------- |
-| `ical_urls`  | ✓        | List of feeds (see below)                                           |
-| `disclaimer` | –        | Text appended to every event description (Markdown links supported) |
+| Key          | Required | Description                                          |
+| ------------ | -------- | ---------------------------------------------------- |
+| `ical_urls`  | ✓        | List of feeds (see below)                            |
+| `disclaimer` | –        | HTML appended to every event description (see below) |
+
+The `disclaimer` value is plain HTML. Supported tags: `<a href>`, `<br>`, `<b>`, `<i>`, `<strong>`, `<em>`. Example:
+
+```yaml
+disclaimer: >-
+  <em>Quelle: <a href="https://example.org">Veranstalter XY</a><br>
+  Keine Gewähr für Vollständigkeit.</em>
+```
+
+If the disclaimer changes, all events are updated on the next run (the disclaimer is part of the content hash).
 
 Per feed:
 

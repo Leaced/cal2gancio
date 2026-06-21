@@ -100,14 +100,14 @@ class GancioClient:
 
         if resp.status_code == 429:
             retry_after = float(resp.headers.get("Retry-After", max(self._delay, 5.0)))
-            time.sleep(retry_after)
+            _wait(retry_after, reason="Rate limit (429)")
             try:
                 resp = req_fn()
             except requests.RequestException as e:
                 return None, str(e)
 
         if self._delay > 0:
-            time.sleep(self._delay)
+            _wait(self._delay)
 
         return resp, None
 
@@ -115,6 +115,13 @@ class GancioClient:
 # ---------------------------------------------------------------------------
 # Internal
 # ---------------------------------------------------------------------------
+
+def _wait(seconds: float, reason: str = "") -> None:
+    if seconds > 30:
+        label = f"{reason} – " if reason else ""
+        print(f"  ⏳ {label}warte {seconds:.0f}s …", flush=True)
+    time.sleep(seconds)
+
 
 def _resolve_base_url(url: str) -> str:
     """Follow redirects once at startup to get the canonical base URL."""
