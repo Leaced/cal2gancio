@@ -34,10 +34,13 @@ def sync_feed(feed: FeedConfig, client: GancioClient, disclaimer: str = "") -> N
 
 
 def sync_all(cfg: AppConfig) -> None:
-    token  = get_token(cfg.gancio_url, cfg.username, cfg.password)
+    token  = get_token(cfg.gancio_url, cfg.username, cfg.password) if cfg.username else None
     client = GancioClient(cfg.gancio_url, token)
 
-    print(f"Angemeldet als {cfg.username} @ {cfg.gancio_url}")
+    if cfg.username:
+        print(f"Angemeldet als {cfg.username} @ {cfg.gancio_url}")
+    else:
+        print(f"Anonym @ {cfg.gancio_url}")
 
     for feed in cfg.feeds:
         sync_feed(feed, client, cfg.disclaimer)

@@ -56,17 +56,20 @@ def load() -> AppConfig:
     with CONFIG_PATH.open() as f:
         raw = yaml.safe_load(f)
 
-    required = ["gancio_url", "username", "ical_urls"]
+    required = ["gancio_url", "ical_urls"]
     missing = [k for k in required if not raw.get(k)]
     if missing:
         print(f"Error: missing config keys: {', '.join(missing)}", file=sys.stderr)
         sys.exit(1)
 
-    try:
-        password = Path(raw.get("password_file", "/run/secrets/gancio_password")).read_text().strip()
-    except OSError as e:
-        print(f"Error reading password file: {e}", file=sys.stderr)
-        sys.exit(1)
+    username = raw.get("username") or ""
+    password = ""
+    if username:
+        try:
+            password = Path(raw.get("password_file", "/run/secrets/gancio_password")).read_text().strip()
+        except OSError as e:
+            print(f"Error reading password file: {e}", file=sys.stderr)
+            sys.exit(1)
 
     feeds = [
         FeedConfig(
@@ -81,7 +84,7 @@ def load() -> AppConfig:
 
     return AppConfig(
         gancio_url=raw["gancio_url"].rstrip("/"),
-        username=raw["username"],
+        username=username,
         password=password,
         disclaimer=raw.get("disclaimer", ""),
         feeds=feeds,

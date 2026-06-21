@@ -10,11 +10,9 @@ def get_token(base_url: str, username: str, password: str) -> str:
     """
     resp = requests.post(
         f"{base_url}/oauth/login",
-        data={
-            "username":   username,
-            "password":   password,
-            "client_id":  "self",
-            "grant_type": "password",
+        json={
+            "username": username,
+            "password": password,
         },
         timeout=15,
     )

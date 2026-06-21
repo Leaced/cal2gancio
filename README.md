@@ -40,8 +40,8 @@ ical_urls:
 | Key             | Required | Description                                                         |
 | --------------- | -------- | ------------------------------------------------------------------- |
 | `gancio_url`    | ✓        | Base URL of the Gancio instance                                     |
-| `username`      | ✓        | Login e-mail / username                                             |
-| `password_file` | –        | Path to a file containing the password (default: `/run/secrets/gancio_password`) |
+| `username`      | –        | Login e-mail / username; omit for anonymous posting (if the instance allows it) |
+| `password_file` | –        | Path to a file containing the password (default: `/run/secrets/gancio_password`); ignored when `username` is absent |
 | `ical_urls`     | ✓        | List of feeds (see below)                                           |
 | `disclaimer`    | –        | Text appended to every event description (Markdown links supported) |
 

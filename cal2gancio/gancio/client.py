@@ -12,9 +12,9 @@ from .encoding import ApiResult, strip_meta, to_multipart
 
 
 class GancioClient:
-    def __init__(self, base_url: str, token: str) -> None:
+    def __init__(self, base_url: str, token: str | None) -> None:
         self._base    = base_url
-        self._headers = {"Authorization": f"Bearer {token}"}
+        self._headers = {"Authorization": f"Bearer {token}"} if token else {}
 
     # ── Lookup ────────────────────────────────────────────────────────────
 
