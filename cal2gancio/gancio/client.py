@@ -6,6 +6,8 @@ GancioClient – wraps the three API operations used by the sync:
   update_event(gancio_id, event) PUT  /api/event
 """
 
+import urllib.parse
+
 import requests
 
 from .encoding import ApiResult, strip_meta, to_multipart
@@ -13,7 +15,7 @@ from .encoding import ApiResult, strip_meta, to_multipart
 
 class GancioClient:
     def __init__(self, base_url: str, token: str | None) -> None:
-        self._base    = base_url
+        self._base    = _resolve_base_url(base_url)
         self._headers = {"Authorization": f"Bearer {token}"} if token else {}
 
     # ── Lookup ────────────────────────────────────────────────────────────
@@ -87,6 +89,16 @@ class GancioClient:
 # ---------------------------------------------------------------------------
 # Internal
 # ---------------------------------------------------------------------------
+
+def _resolve_base_url(url: str) -> str:
+    """Follow redirects once at startup to get the canonical base URL."""
+    try:
+        resp = requests.get(url, allow_redirects=True, timeout=10)
+        parsed = urllib.parse.urlparse(resp.url)
+        return f"{parsed.scheme}://{parsed.netloc}"
+    except Exception:
+        return url
+
 
 def _extract_id(resp: requests.Response) -> int | None:
     try:
