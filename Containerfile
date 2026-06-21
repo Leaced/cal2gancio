@@ -44,4 +44,6 @@ USER cal2gancio
 # Mount: /opt/cal2gancio/config.yml + password_file path from config
 VOLUME ["/opt/cal2gancio"]
 
+ENV PYTHONUNBUFFERED=1
+
 CMD ["python3", "-m", "cal2gancio"]
