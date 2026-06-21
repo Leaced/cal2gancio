@@ -42,6 +42,8 @@ def sync_all(cfg: AppConfig) -> None:
         print(f"Angemeldet als {cfg.username} @ {cfg.gancio_url}")
     else:
         print(f"Anonym @ {cfg.gancio_url}")
+        print("  ⚠ Anonymer Modus: Events werden nur erstellt, nicht aktualisiert")
+        print("    (Gancio stellt anonyme Events in Pending – Lookup nicht möglich)")
 
     for feed in cfg.feeds:
         sync_feed(feed, client, global_disclaimer=cfg.disclaimer)

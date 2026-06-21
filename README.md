@@ -178,6 +178,12 @@ On each run, for every iCal event:
 
 This means the tool works correctly across multiple machines and survives restarts without any local state.
 
+### Anonymous mode limitation
+
+When running without `username`, events are submitted anonymously and placed in Gancio's **pending/unconfirmed** queue. Pending events are not returned by the public events API, so the `_ical_` lookup always finds nothing — every run creates new duplicates instead of updating. Additionally, `PUT /api/event` always requires authentication.
+
+**Anonymous mode is therefore create-only.** Use credentials (`username` + `password_file`) for full stateless sync with create, update, and skip support.
+
 > **Note:** Events without a `UID` field in the iCal feed use `title + start_timestamp` as a fallback identity key. If their title or date changes, they will be duplicated rather than updated. Well-maintained feeds always export proper UIDs.
 
 ## Supported iCal fields
