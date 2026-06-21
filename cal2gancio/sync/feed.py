@@ -8,8 +8,9 @@ from .decision     import sync_event
 _ICONS = {"erstellt": "✓", "aktualisiert": "✓", "unverändert": "="}
 
 
-def sync_feed(feed: FeedConfig, client: GancioClient, disclaimer: str = "") -> None:
+def sync_feed(feed: FeedConfig, client: GancioClient, global_disclaimer: str = "") -> None:
     print(f"\n→ {feed.url}")
+    disclaimer = feed.disclaimer if feed.disclaimer else global_disclaimer
     events = fetch_for_feed(feed, disclaimer)
 
     if not events:
@@ -43,6 +44,6 @@ def sync_all(cfg: AppConfig) -> None:
         print(f"Anonym @ {cfg.gancio_url}")
 
     for feed in cfg.feeds:
-        sync_feed(feed, client, cfg.disclaimer)
+        sync_feed(feed, client, global_disclaimer=cfg.disclaimer)
 
     print("\nFertig.")

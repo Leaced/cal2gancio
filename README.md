@@ -26,15 +26,16 @@ gancio:
   password_file: /run/secrets/gancio_password  # default, ignored without username
   wait: 2.0                               # seconds between writes (default: 0)
 
-disclaimer: "Quelle: <a href=\"https://example.org\">Veranstalter XY</a> – importiert via cal2gancio.<br><i>Keine Gewähr für Vollständigkeit.</i>"  # optional
+disclaimer: "<em>Importiert via cal2gancio.</em>"  # optional, global fallback
 
-ical_urls:
+sources:
   - url: https://example.org/events/?ical=1
     default_place_name: Kreativfabrik Wiesbaden
     default_place_address: Murnaustraße 1, 65189 Wiesbaden
     additional_tags:
       - kreativfabrik
       - wiesbaden
+    disclaimer: "<em>Quelle: <a href=\"https://example.org\">Veranstalter XY</a></em>"  # overrides global
 
   - url: https://other-location.org/cal.ics
     # No defaults needed if the feed contains LOCATION fields
@@ -51,12 +52,22 @@ ical_urls:
 
 ### Top-level keys
 
-| Key          | Required | Description                                          |
-| ------------ | -------- | ---------------------------------------------------- |
-| `ical_urls`  | ✓        | List of feeds (see below)                            |
-| `disclaimer` | –        | HTML appended to every event description (see below) |
+| Key          | Required | Description                                                                      |
+| ------------ | -------- | -------------------------------------------------------------------------------- |
+| `sources`    | ✓        | List of feeds (see below)                                                        |
+| `disclaimer` | –        | HTML fallback disclaimer appended to every event that has no per-feed disclaimer |
 
-The `disclaimer` value is plain HTML. Supported tags: `<a href>`, `<br>`, `<b>`, `<i>`, `<strong>`, `<em>`. Example:
+Per feed (`sources` entries):
+
+| Key                     | Required | Description                                                   |
+| ----------------------- | -------- | ------------------------------------------------------------- |
+| `url`                   | ✓        | iCal feed URL                                                 |
+| `default_place_name`    | –        | Used when the feed has no `LOCATION` field                    |
+| `default_place_address` | –        | Used when the feed has no `LOCATION` field                    |
+| `additional_tags`       | –        | Tags added to every event from this feed                      |
+| `disclaimer`            | –        | HTML appended to every event from this feed; overrides global |
+
+The `disclaimer` field (global or per feed) accepts plain HTML. Example:
 
 ```yaml
 disclaimer: >-
@@ -64,16 +75,7 @@ disclaimer: >-
   Keine Gewähr für Vollständigkeit.</em>
 ```
 
-If the disclaimer changes, all events are updated on the next run (the disclaimer is part of the content hash).
-
-Per feed:
-
-| Key                     | Required | Description                                |
-| ----------------------- | -------- | ------------------------------------------ |
-| `url`                   | ✓        | iCal feed URL                              |
-| `default_place_name`    | –        | Used when the feed has no `LOCATION` field |
-| `default_place_address` | –        | Used when the feed has no `LOCATION` field |
-| `additional_tags`       | –        | Tags added to every event from this feed   |
+If the disclaimer changes, all affected events are updated on the next run (it is part of the content hash).
 
 ## Container
 

@@ -8,14 +8,15 @@ Config file structure:
       password_file: /run/secrets/gancio_password  # optional
       wait: 2.0                         # seconds between writes, default 0
 
-    disclaimer: "Imported via [cal2gancio](https://github.com/leaced/cal2gancio)."  # optional
+    disclaimer: "<em>Importiert via cal2gancio.</em>"  # optional, global fallback
 
-    ical_urls:
+    sources:
       - url: https://example.org/events/?ical=1
         default_place_name: Kreativfabrik Wiesbaden
         default_place_address: Murnaustraße 1, 65189 Wiesbaden
         additional_tags:
           - kreativfabrik
+        disclaimer: "<em>Quelle: Kreativfabrik</em>"  # optional, overrides global
       - url: https://other.org/feed.ics
 """
 
@@ -40,6 +41,7 @@ class FeedConfig:
     default_place_name: str = ""
     default_place_address: str = ""
     additional_tags: list[str] = field(default_factory=list)
+    disclaimer: str = ""
 
 
 @dataclass
@@ -66,8 +68,8 @@ def load() -> AppConfig:
         print("Error: missing gancio.url", file=sys.stderr)
         sys.exit(1)
 
-    if not raw.get("ical_urls"):
-        print("Error: missing ical_urls", file=sys.stderr)
+    if not raw.get("sources"):
+        print("Error: missing sources", file=sys.stderr)
         sys.exit(1)
 
     username = gancio.get("username") or ""
@@ -87,8 +89,9 @@ def load() -> AppConfig:
             default_place_name=entry.get("default_place_name", ""),
             default_place_address=entry.get("default_place_address", ""),
             additional_tags=entry.get("additional_tags") or [],
+            disclaimer=entry.get("disclaimer", ""),
         )
-        for entry in raw["ical_urls"]
+        for entry in raw["sources"]
         if entry.get("url")
     ]
 
