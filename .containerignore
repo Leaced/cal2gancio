@@ -1,0 +1,9 @@
+# Exclude everything not needed in the image
+.git
+.github
+.containerignore
+*.md
+config.yml
+**/__pycache__
+**/*.pyc
+**/*.pyo

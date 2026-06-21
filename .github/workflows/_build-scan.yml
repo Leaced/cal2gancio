@@ -1,0 +1,62 @@
+name: _build-scan (reusable)
+
+# Called by ci.yml. Builds a single-arch image, pushes it, then runs Trivy.
+# Pipeline fails on CRITICAL or HIGH vulnerabilities where a fix is available
+# (--ignore-unfixed skips issues with no upstream patch yet).
+
+on:
+  workflow_call:
+    inputs:
+      tags:
+        description: "Image tags to build and push (one per line)"
+        required: true
+        type: string
+      scan-ref:
+        description: "Full image reference used for the Trivy scan"
+        required: true
+        type: string
+
+jobs:
+  build-push-scan:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to ghcr.io
+        uses: redhat-actions/registry-login@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        id: build
+        uses: redhat-actions/buildah-build@v2
+        with:
+          image:          ghcr.io/${{ github.repository }}
+          tags:           ${{ inputs.tags }}
+          platforms:      linux/amd64
+          containerfiles: ./Containerfile
+          oci:            true
+
+      - name: Push image
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image:    ${{ steps.build.outputs.image }}
+          tags:     ${{ steps.build.outputs.tags }}
+          registry: ghcr.io
+
+      - name: Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref:      ${{ inputs.scan-ref }}
+          format:         table
+          exit-code:      "1"
+          ignore-unfixed: true
+          vuln-type:      "os,library"
+          severity:       "CRITICAL,HIGH"
