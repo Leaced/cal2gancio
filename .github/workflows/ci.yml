@@ -7,12 +7,14 @@ on:
       - '**.md'
       - 'config.yml'
       - '.github/**'
+      - 'renovate.json'
   pull_request:
     branches: [main]
     paths-ignore:
       - '**.md'
       - 'config.yml'
       - '.github/**'
+      - 'renovate.json'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
