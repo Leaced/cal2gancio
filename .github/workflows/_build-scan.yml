@@ -1,0 +1,97 @@
+name: _build-scan (reusable)
+
+# Called by ci.yml. Computes image tags, builds a single-arch OCI image,
+# pushes it to ghcr.io, then runs Trivy.
+# Pipeline fails on CRITICAL or HIGH vulnerabilities where a fix is available
+# (--ignore-unfixed skips issues with no upstream patch yet).
+
+on:
+  workflow_call:
+    outputs:
+      scan-ref:
+        description: "Full image reference that was built and pushed"
+        value: ${{ jobs.build-push-scan.outputs.scan-ref }}
+
+jobs:
+  build-push-scan:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+      actions: read            # codeql-action/upload-sarif needs this for workflow metadata
+    outputs:
+      scan-ref: ${{ steps.tags.outputs.scan-ref }}
+
+    steps:
+      - name: Compute image tags
+        id: tags
+        run: |
+          SHA="${GITHUB_SHA::8}"
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            SCAN_REF="${IMAGE}:pr-${{ github.event.number }}-${SHA}"
+            TAGS="${SCAN_REF}"
+          else
+            SCAN_REF="${IMAGE}:main-${SHA}"
+            TAGS="${SCAN_REF}"$'\n'"${IMAGE}:main"
+          fi
+
+          echo "scan-ref=${SCAN_REF}" >> "$GITHUB_OUTPUT"
+          {
+            echo "tags<<EOF"
+            echo "${TAGS}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image
+        id: build
+        uses: redhat-actions/buildah-build@v2.13
+        with:
+          tags:           ${{ steps.tags.outputs.tags }}
+          platforms:      linux/amd64
+          containerfiles: ./Containerfile
+          oci:            true
+
+      - name: Push image
+        uses: redhat-actions/push-to-registry@v2.8
+        with:
+          tags:     ${{ steps.build.outputs.tags }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trivy vulnerability scan (SARIF)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref:      ${{ steps.tags.outputs.scan-ref }}
+          format:         sarif
+          output:         trivy-results.sarif
+          ignore-unfixed: true
+          vuln-type:      "os,library"
+          severity:       "CRITICAL,HIGH"
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Fail on fixable CRITICAL/HIGH vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref:      ${{ steps.tags.outputs.scan-ref }}
+          format:         table
+          exit-code:      "1"
+          ignore-unfixed: true
+          vuln-type:      "os,library"
+          severity:       "CRITICAL,HIGH"
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}

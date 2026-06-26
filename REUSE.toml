@@ -1,0 +1,30 @@
+# REUSE.toml
+# Machine-readable license and copyright declarations per the REUSE specification.
+# https://reuse.software/spec/
+#
+# Validate with:  reuse lint
+# Generate SBOM:  reuse spdx
+
+version = 1
+
+[[annotations]]
+path = [
+    "Containerfile",
+    ".containerignore",
+    "requirements.txt",
+    "renovate.json",
+    ".releaserc.json",
+    ".github/**",
+    ".gitignore",
+    "README.md",
+    "cal2gancio/**/*.py",
+    "docs/**"
+]
+SPDX-FileCopyrightText = "Contributors to cal2gancio"
+SPDX-License-Identifier = "EUPL-1.2"
+
+# The license text itself is not licensed
+[[annotations]]
+path = "LICENSES/EUPL-1.2.txt"
+SPDX-FileCopyrightText = "Creative Commons Corporation"
+SPDX-License-Identifier = "LicenseRef-scancode-public-domain"

@@ -1,0 +1,21 @@
+name: Cleanup PR images
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: write
+    steps:
+      - name: Delete PR container image versions
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name:         cal2gancio
+          package-type:         container
+          owner:                ${{ github.repository_owner }}
+          token:                ${{ secrets.GITHUB_TOKEN }}
+          version-pattern:      "^pr-${{ github.event.number }}-"
+          min-versions-to-keep: 0

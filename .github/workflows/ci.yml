@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'config.yml'
+      - '.github/**'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'config.yml'
+      - '.github/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Permissions needed across all jobs.
+# Kept broad at the top level so the GITHUB_TOKEN passed to the reusable
+# workflow has sufficient rights. Jobs that don't need write access are not
+# further restricted — this is a single-maintainer project.
+permissions:
+  contents: write        # semantic-release: create tags + GitHub releases
+  packages: write        # ghcr.io push
+  issues: write          # semantic-release: close referenced issues
+  pull-requests: write   # semantic-release: comment on PRs
+  security-events: write # trivy: upload SARIF to GitHub Security tab
+  actions: read          # codeql-action/upload-sarif: workflow metadata access
+
+jobs:
+  # ── 0. REUSE licence compliance ──────────────────────────────────────────
+  reuse:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: fsfe/reuse-action@v6
+
+  # ── 1. Build, push, scan (reusable) ──────────────────────────────────────
+  build-push-scan:
+    needs: [reuse]
+    uses: ./.github/workflows/_build-scan.yml
+    secrets: inherit
+
+  # ── 2. Semantic release + image tagging ──────────────────────────────────
+  release:
+    needs: [build-push-scan]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout (full history for semantic-release)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Semantic Release
+        id: semantic
+        uses: cycjimmy/semantic-release-action@v6.0.0
+        with:
+          # On PR: dry-run previews the next version without publishing.
+          # On main: creates the GitHub release and git tag.
+          dry_run: ${{ github.event_name == 'pull_request' }}
+          extra_plugins: |
+            @semantic-release/commit-analyzer
+            @semantic-release/release-notes-generator
+            @semantic-release/github
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag release image (vX.X.X + latest)
+        if: steps.semantic.outputs.new_release_published == 'true'
+        env:
+          SRC:     ${{ needs.build-push-scan.outputs.scan-ref }}
+          VERSION: ${{ steps.semantic.outputs.new_release_version }}
+          IMAGE:   ghcr.io/${{ github.repository }}
+        run: |
+          IMAGE="${IMAGE,,}"
+          echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
+          skopeo copy "docker://${SRC}" "docker://${IMAGE}:v${VERSION}"
+          skopeo copy "docker://${SRC}" "docker://${IMAGE}:latest"
