@@ -11,6 +11,30 @@
       "description": "Automerge non-major updates and digest pins",
       "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
       "automerge": true
+    },
+    {
+      "description": "Python dependency updates trigger patch releases",
+      "matchManagers": ["pip_requirements"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "semanticCommitType": "fix"
+    },
+    {
+      "description": "Python major dependency updates trigger minor releases",
+      "matchManagers": ["pip_requirements"],
+      "matchUpdateTypes": ["major"],
+      "semanticCommitType": "feat"
+    },
+    {
+      "description": "Container base image updates trigger patch releases",
+      "matchManagers": ["dockerfile"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "semanticCommitType": "fix"
+    },
+    {
+      "description": "Container base image major updates trigger minor releases",
+      "matchManagers": ["dockerfile"],
+      "matchUpdateTypes": ["major"],
+      "semanticCommitType": "feat"
     }
   ]
 }
