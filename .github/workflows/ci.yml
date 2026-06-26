@@ -35,8 +35,8 @@ jobs:
   reuse:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: fsfe/reuse-action@v6
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: fsfe/reuse-action@676e2d560c9a403aa252096d99fcab3e1132b0f5 # v6
 
   # ── 1. Build, push, scan (reusable) ──────────────────────────────────────
   build-push-scan:
@@ -50,13 +50,13 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout (full history for semantic-release)
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
 
       - name: Semantic Release
         id: semantic
-        uses: cycjimmy/semantic-release-action@v6.0.0
+        uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90 # v6.0.0
         with:
           # On PR: dry-run previews the next version without publishing.
           # On main: creates the GitHub release and git tag.
