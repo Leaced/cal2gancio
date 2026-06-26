@@ -12,10 +12,13 @@ jobs:
     steps:
       - name: Delete PR container image versions
         uses: actions/delete-package-versions@e5bc658cc4c965c472efe991f8beea3981499c55 # v5
+        uses: actions/delete-package-versions@v5
+        continue-on-error: true
         with:
-          package-name:         cal2gancio
-          package-type:         container
-          owner:                ${{ github.repository_owner }}
-          token:                ${{ secrets.GITHUB_TOKEN }}
-          version-pattern:      "^pr-${{ github.event.number }}-"
-          min-versions-to-keep: 0
+          package-name:                  cal2gancio
+          package-type:                  container
+          owner:                         ${{ github.repository_owner }}
+          token:                         ${{ secrets.GITHUB_TOKEN }}
+          version-pattern:               "^pr-${{ github.event.number }}-"
+          min-versions-to-keep:          0
+          ignore-versions:               "^(latest|main|v\\d)"
