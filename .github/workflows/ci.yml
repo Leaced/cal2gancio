@@ -35,7 +35,7 @@ jobs:
   reuse:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - uses: fsfe/reuse-action@676e2d560c9a403aa252096d99fcab3e1132b0f5 # v6
 
   # ── 1. Build, push, scan (reusable) ──────────────────────────────────────
@@ -50,7 +50,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout (full history for semantic-release)
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0
 
