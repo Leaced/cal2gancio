@@ -46,16 +46,18 @@ sources:
 | Key             | Required | Description                                                                      |
 | --------------- | -------- | -------------------------------------------------------------------------------- |
 | `url`           | ✓        | Base URL of the Gancio instance (redirects are followed automatically)           |
+| `version`       | –        | Gancio API version: `1` (≤ 1.x) or `2` (≥ 2.x, default)                        |
 | `username`      | –        | Login e-mail; omit for anonymous posting (if the instance allows it)             |
 | `password_file` | –        | Path to a file containing the password (default: `/run/secrets/gancio_password`) |
 | `wait`          | –        | Seconds to wait between write requests; use when hitting HTTP 429 (default: `0`) |
 
 ### Top-level keys
 
-| Key          | Required | Description                                                                      |
-| ------------ | -------- | -------------------------------------------------------------------------------- |
-| `sources`    | ✓        | List of feeds (see below)                                                        |
-| `disclaimer` | –        | HTML fallback disclaimer appended to every event that has no per-feed disclaimer |
+| Key               | Required | Description                                                                   |
+| ----------------- | -------- | ----------------------------------------------------------------------------- |
+| `sources`         | ✓        | List of feeds (see below)                                                     |
+| `disclaimer`      | –        | HTML fallback disclaimer; appended to every event without a per-feed override |
+| `event_link_text` | –        | Link text for the iCal `URL` field (default: `"Event details"`)               |
 
 Per feed (`sources` entries):
 
@@ -66,13 +68,27 @@ Per feed (`sources` entries):
 | `default_place_address` | –        | Used when the feed has no `LOCATION` field                    |
 | `additional_tags`       | –        | Tags added to every event from this feed                      |
 | `disclaimer`            | –        | HTML appended to every event from this feed; overrides global |
+| `event_link_text`       | –        | Link text for the `URL` field of this feed; overrides global  |
+| `ignore_past_events`    | –        | Skip events whose start time is in the past (default: `true`) |
 
-The `disclaimer` field (global or per feed) accepts plain HTML. Example:
+The `disclaimer` field accepts HTML. Use `<br>` for line breaks. YAML `>-` is recommended so `<br>` stays in the string while source lines can wrap:
 
 ```yaml
 disclaimer: >-
-  <em>Quelle: <a href="https://example.org">Veranstalter XY</a><br>
-  Keine Gewähr für Vollständigkeit.</em>
+  <em>Quelle: <a href="https://example.org">Veranstalter XY</a></em><br>
+  Keine Gewähr für Vollständigkeit.
+```
+
+If the iCal feed contains a `URL` field, it is included in the description as a clickable link:
+
+```
+Event description
+
+——————————————————————————————
+
+<a href="https://…">Event details</a>
+
+disclaimer
 ```
 
 If the disclaimer changes, all affected events are updated on the next run (it is part of the content hash).
@@ -180,25 +196,36 @@ This means the tool works correctly across multiple machines and survives restar
 
 ### Anonymous mode limitation
 
-When running without `username`, events are submitted anonymously and placed in Gancio's **pending/unconfirmed** queue. Pending events are not returned by the public events API, so the `_ical_` lookup always finds nothing — every run creates new duplicates instead of updating. Additionally, `PUT /api/event` always requires authentication.
+When running without `username`, events are submitted anonymously and placed in Gancio's **pending/unconfirmed** queue. Pending events are not returned by the public events API, so a freshly submitted anonymous event is invisible on the next run.
 
-**Anonymous mode is therefore create-only.** Use credentials (`username` + `password_file`) for full stateless sync with create, update, and skip support.
+Once an admin approves (publishes) an event, it becomes visible and the stateless lookup works again:
+
+| Lookup result                                | Action                                    |
+| -------------------------------------------- | ----------------------------------------- |
+| Not found (still pending or never created)   | create — `✓ erstellt`                     |
+| Found, content unchanged (`_icalv_` matches) | skip — `= unverändert`                    |
+| Found, content changed (`_icalv_` differs)   | create new version — `⚠ erstellt (Duplikat)` |
+
+The third case creates a duplicate because `PUT /api/event` always requires authentication. The summary line flags this with `⚠ Duplikat(e)`.
+
+**Use credentials (`username` + `password_file`) for full create / update / skip support.**
 
 > **Note:** Events without a `UID` field in the iCal feed use `title + start_timestamp` as a fallback identity key. If their title or date changes, they will be duplicated rather than updated. Well-maintained feeds always export proper UIDs.
 
 ## Supported iCal fields
 
-| iCal                  | Gancio                                     |
-| --------------------- | ------------------------------------------ |
-| `SUMMARY`             | `title`                                    |
-| `DESCRIPTION`         | `description`                              |
-| `DTSTART`             | `start_datetime`                           |
-| `DTEND` > 24 h        | `multidate`                                |
-| `LOCATION`            | `place_name` + `place_address`             |
-| `GEO`                 | `place_latitude` / `place_longitude`       |
-| `CATEGORIES`          | `tags`                                     |
-| `ATTACH` (image URL)  | `image_url`                                |
-| `RRULE` (weekly only) | `recurrent[frequency]` / `recurrent[days]` |
+| iCal                  | Gancio                                           |
+| --------------------- | ------------------------------------------------ |
+| `SUMMARY`             | `title`                                          |
+| `DESCRIPTION`         | `description`                                    |
+| `DTSTART`             | `start_datetime`                                 |
+| `DTEND` > 24 h        | `multidate`                                      |
+| `LOCATION`            | `place_name` + `place_address`                   |
+| `GEO`                 | `place_latitude` / `place_longitude`             |
+| `CATEGORIES`          | `tags`                                           |
+| `ATTACH` (image URL)  | `image_url`                                      |
+| `URL`                 | link in description (text via `event_link_text`) |
+| `RRULE` (weekly only) | `recurrent[frequency]` / `recurrent[days]`       |
 
 ## Project structure
 

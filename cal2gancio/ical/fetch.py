@@ -9,7 +9,7 @@ from ..config import FeedConfig
 from .event   import build_event
 
 
-def fetch_events(feed: FeedConfig, disclaimer: str = "") -> list[dict]:
+def fetch_events(feed: FeedConfig, disclaimer: str = "", event_link_text: str = "Event details") -> list[dict]:
     """
     Download the iCal feed and return a list of normalized Gancio event dicts.
     Returns [] on HTTP or parse errors (error printed to stderr).
@@ -31,7 +31,7 @@ def fetch_events(feed: FeedConfig, disclaimer: str = "") -> list[dict]:
     for component in cal.walk():
         if component.name != "VEVENT":
             continue
-        event = build_event(component, feed, disclaimer)
+        event = build_event(component, feed, disclaimer, event_link_text)
         if event is not None:
             events.append(event)
 

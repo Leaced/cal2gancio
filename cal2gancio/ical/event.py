@@ -16,8 +16,31 @@ from .recurrence import parse_recurrent
 from .tags       import parse_categories, uid_tag, hash_tag, content_hash
 from .timestamps import to_timestamp
 
+_SEP  = "—" * 30
+_PARA = "<br><br>"
 
-def build_event(component, feed: FeedConfig, disclaimer: str = "") -> dict | None:
+
+def _assemble_description(body: str, url: str, event_link_text: str, disclaimer: str) -> str:
+    url_part = f'<a href="{url}">{event_link_text}</a>' if url else ""
+    extras   = [p for p in [url_part, disclaimer] if p]
+
+    if not extras:
+        return body
+
+    extras_block = _PARA.join(extras)
+
+    if body:
+        return f"{body}{_PARA}{_SEP}{_PARA}{extras_block}"
+
+    return extras_block
+
+
+def build_event(
+    component,
+    feed: FeedConfig,
+    disclaimer: str = "",
+    event_link_text: str = "Event details",
+) -> dict | None:
     """
     Convert a VEVENT to a Gancio event dict.
     Returns None if the component has no DTSTART (unparseable).
@@ -43,12 +66,9 @@ def build_event(component, feed: FeedConfig, disclaimer: str = "") -> dict | Non
     user_tags = parse_categories(component, feed)
     image_url = parse_image_url(component)
 
+    url         = str(component.get("URL", "")).strip()
     description = str(component.get("DESCRIPTION", "")).strip()
-    if disclaimer:
-        if description:
-            description = f"{description}\n\n<hr>\n\n{disclaimer}"
-        else:
-            description = disclaimer
+    description = _assemble_description(description, url, event_link_text, disclaimer)
 
     event: dict = {
         "title":          title,

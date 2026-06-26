@@ -20,6 +20,10 @@ class GancioClient:
         self._headers = {"Authorization": f"Bearer {token}"} if token else {}
         self._delay   = request_delay
 
+    @property
+    def is_anonymous(self) -> bool:
+        return not self._headers
+
     # ── Lookup ────────────────────────────────────────────────────────────
 
     def find_by_uid_tag(self, uid_tag: str) -> dict | None:
@@ -30,7 +34,7 @@ class GancioClient:
         try:
             resp = requests.get(
                 f"{self._base}/api/events",
-                params={"tags[]": uid_tag},
+                params={"tags": uid_tag},
                 headers=self._headers,
                 timeout=15,
             )
@@ -38,8 +42,8 @@ class GancioClient:
             events = resp.json()
             if isinstance(events, list) and events:
                 return events[0]
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"  ⚠ Lookup fehlgeschlagen ({uid_tag}): {e}", flush=True)
         return None
 
     # ── Write ─────────────────────────────────────────────────────────────

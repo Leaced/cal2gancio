@@ -1,7 +1,7 @@
 """
 Decides what to do with a single event: create, update, or skip.
 
-Decision table:
+Decision table (authenticated):
   ┌──────────────────────────────────────────────────┬─────────────────┐
   │ Lookup result                                    │ Action          │
   ├──────────────────────────────────────────────────┼─────────────────┤
@@ -10,7 +10,15 @@ Decision table:
   │ Found, _hash_tag differs  → content changed      │ update (PUT)    │
   │ Found, but gancio_id missing (corrupt response)  │ create (re-POST)│
   └──────────────────────────────────────────────────┴─────────────────┘
+
+Anonymous mode: PUT requires auth, so content changes trigger a new POST
+with a warning. Pending events are invisible to the lookup; only already-
+published (approved) versions of the event can be detected.
+Gancio rejects anonymous POSTs for past events (HTTP 400); the check is
+done locally to avoid the failed request.
 """
+
+import time
 
 from ..gancio.client import GancioClient
 
@@ -18,7 +26,8 @@ from ..gancio.client import GancioClient
 def sync_event(event: dict, client: GancioClient) -> str:
     """
     Sync one event. Returns a short status string for logging:
-    "erstellt" | "aktualisiert" | "unverändert" | "Fehler: …"
+    "erstellt" | "aktualisiert" | "unverändert" | "erstellt (Duplikat)" |
+    "vergangen" | "Fehler: …"
     """
     uid_tag  = event["_uid_tag"]
     hash_tag = event["_hash_tag"]
@@ -27,6 +36,8 @@ def sync_event(event: dict, client: GancioClient) -> str:
 
     # ── New ───────────────────────────────────────────────────────────────
     if existing is None:
+        if client.is_anonymous and _is_past(event):
+            return "vergangen"
         result = client.create_event(event)
         return "erstellt" if result.success else f"Fehler: {result.error}"
 
@@ -35,7 +46,14 @@ def sync_event(event: dict, client: GancioClient) -> str:
     if hash_tag in existing_tags:
         return "unverändert"
 
-    # ── Update ────────────────────────────────────────────────────────────
+    # ── Content changed ───────────────────────────────────────────────────
+    if client.is_anonymous:
+        # PUT requires auth; past events can't be re-created either
+        if _is_past(event):
+            return "vergangen"
+        result = client.create_event(event)
+        return "erstellt (Duplikat)" if result.success else f"Fehler: {result.error}"
+
     gancio_id = existing.get("id")
     if not gancio_id:
         result = client.create_event(event)
@@ -43,6 +61,10 @@ def sync_event(event: dict, client: GancioClient) -> str:
 
     result = client.update_event(gancio_id, event)
     return "aktualisiert" if result.success else f"Fehler: {result.error}"
+
+
+def _is_past(event: dict) -> bool:
+    return event.get("start_datetime", 0) < time.time()
 
 
 def _extract_tags(gancio_event: dict) -> list[str]:

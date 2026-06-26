@@ -42,15 +42,19 @@ class FeedConfig:
     default_place_address: str = ""
     additional_tags: list[str] = field(default_factory=list)
     disclaimer: str = ""
+    event_link_text: str = ""
+    ignore_past_events: bool = True
 
 
 @dataclass
 class AppConfig:
     gancio_url: str
+    gancio_version: int
     username: str
     password: str
     request_delay: float
     disclaimer: str
+    event_link_text: str
     feeds: list[FeedConfig]
 
 
@@ -81,6 +85,7 @@ def load() -> AppConfig:
             print(f"Error reading password file: {e}", file=sys.stderr)
             sys.exit(1)
 
+    gancio_version = int(gancio.get("version", 2))
     request_delay = float(gancio.get("wait", 0.0))
 
     feeds = [
@@ -90,6 +95,8 @@ def load() -> AppConfig:
             default_place_address=entry.get("default_place_address", ""),
             additional_tags=entry.get("additional_tags") or [],
             disclaimer=entry.get("disclaimer", ""),
+            event_link_text=entry.get("event_link_text", ""),
+            ignore_past_events=bool(entry.get("ignore_past_events", True)),
         )
         for entry in raw["sources"]
         if entry.get("url")
@@ -97,9 +104,11 @@ def load() -> AppConfig:
 
     return AppConfig(
         gancio_url=gancio_url,
+        gancio_version=gancio_version,
         username=username,
         password=password,
         request_delay=request_delay,
         disclaimer=raw.get("disclaimer", ""),
+        event_link_text=raw.get("event_link_text", "Event details"),
         feeds=feeds,
     )

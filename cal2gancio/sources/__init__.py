@@ -15,15 +15,15 @@ from collections.abc import Callable
 from ..config import FeedConfig, SourceType
 from ..ical.fetch import fetch_events as _ical_fetch
 
-FetchFn = Callable[[FeedConfig, str], list[dict]]
+FetchFn = Callable[[FeedConfig, str, str], list[dict]]
 
 _FETCHERS: dict[SourceType, FetchFn] = {
     SourceType.ICAL: _ical_fetch,
 }
 
 
-def fetch_for_feed(feed: FeedConfig, disclaimer: str = "") -> list[dict]:
+def fetch_for_feed(feed: FeedConfig, disclaimer: str = "", event_link_text: str = "Event details") -> list[dict]:
     fetcher = _FETCHERS.get(feed.source_type)
     if fetcher is None:
         raise ValueError(f"Unsupported source type: {feed.source_type!r}")
-    return fetcher(feed, disclaimer)
+    return fetcher(feed, disclaimer, event_link_text)
