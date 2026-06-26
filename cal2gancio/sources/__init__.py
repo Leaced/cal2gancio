@@ -13,8 +13,8 @@ To add a new source type:
 
 from collections.abc import Callable
 
-from ..config import FeedConfig, SourceType
-from ..ical.fetch import fetch_events as _ical_fetch
+from ..config import FeedConfig, FilterConfig, SourceType
+from .ical.fetch import fetch_events as _ical_fetch
 
 FetchFn = Callable[[FeedConfig, str, str, "str | None"], list[dict]]
 
@@ -32,4 +32,19 @@ def fetch_for_feed(
     fetcher = _FETCHERS.get(feed.source_type)
     if fetcher is None:
         raise ValueError(f"Unsupported source type: {feed.source_type!r}")
-    return fetcher(feed, disclaimer, event_link_text, cancelled_prefix)
+    events = fetcher(feed, disclaimer, event_link_text, cancelled_prefix)
+    return _apply_filter(events, feed.filter)
+
+
+def _apply_filter(events: list[dict], f: FilterConfig) -> list[dict]:
+    if f.include:
+        events = [
+            e for e in events
+            if any(s.lower() in e.get("title", "").lower() for s in f.include)
+        ]
+    if f.exclude:
+        events = [
+            e for e in events
+            if not any(s.lower() in e.get("title", "").lower() for s in f.exclude)
+        ]
+    return events

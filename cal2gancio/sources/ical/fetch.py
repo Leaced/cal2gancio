@@ -5,7 +5,7 @@ import sys
 import requests
 from icalendar import Calendar
 
-from ..config import FeedConfig
+from ...config import FeedConfig
 from .event   import build_event
 
 

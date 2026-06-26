@@ -14,7 +14,7 @@ without keeping any local state file.
 import hashlib
 import json
 
-from ..config import FeedConfig
+from ...config import FeedConfig
 
 UID_PREFIX  = "_ical_"
 HASH_PREFIX = "_icalv_"

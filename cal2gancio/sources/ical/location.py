@@ -1,6 +1,6 @@
 """Parses LOCATION and GEO from a VEVENT component."""
 
-from ..config import FeedConfig
+from ...config import FeedConfig
 
 
 def parse_location(component, feed: FeedConfig) -> dict:

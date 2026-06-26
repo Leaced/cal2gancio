@@ -47,6 +47,12 @@ class TextConfig:
 
 
 @dataclass
+class FilterConfig:
+    include: list[str] = field(default_factory=list)
+    exclude: list[str] = field(default_factory=list)
+
+
+@dataclass
 class FeedConfig:
     url: str
     source_type: SourceType = SourceType.ICAL
@@ -57,6 +63,7 @@ class FeedConfig:
     event_link_text: str = ""
     ignore_past_events: bool = True
     delete_cancelled: bool = False
+    filter: FilterConfig = field(default_factory=FilterConfig)
 
 
 @dataclass
@@ -69,6 +76,13 @@ class AppConfig:
     disclaimer: str
     text: TextConfig
     feeds: list[FeedConfig]
+
+
+def _parse_filter(raw: dict) -> FilterConfig:
+    return FilterConfig(
+        include=[str(s) for s in raw.get("include") or []],
+        exclude=[str(s) for s in raw.get("exclude") or []],
+    )
 
 
 def load() -> AppConfig:
@@ -117,6 +131,7 @@ def load() -> AppConfig:
             event_link_text=entry.get("event_link_text", ""),
             ignore_past_events=bool(entry.get("ignore_past_events", True)),
             delete_cancelled=bool(entry.get("delete_cancelled", False)),
+            filter=_parse_filter(entry.get("filter") or {}),
         )
         for entry in raw["sources"]
         if entry.get("url")

@@ -12,7 +12,7 @@ The returned dict contains:
 
 from datetime import datetime, timezone
 
-from ..config import FeedConfig
+from ...config import FeedConfig
 from .location   import parse_location, parse_geo
 from .media      import parse_image_url
 from .recurrence import parse_recurrent
