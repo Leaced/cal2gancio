@@ -8,16 +8,6 @@
 version = 1
 
 [[annotations]]
-path = "cal2gancio/**/*.py"
-SPDX-FileCopyrightText = "Contributors to cal2gancio"
-SPDX-License-Identifier = "EUPL-1.2"
-
-[[annotations]]
-path = "cal2gancio/__init__.py"
-SPDX-FileCopyrightText = "Contributors to cal2gancio"
-SPDX-License-Identifier = "EUPL-1.2"
-
-[[annotations]]
 path = [
     "Containerfile",
     ".containerignore",
@@ -25,15 +15,10 @@ path = [
     "renovate.json",
     ".releaserc.json",
     ".github/**",
-    ".gitignore"
-]
-SPDX-FileCopyrightText = "Contributors to cal2gancio"
-SPDX-License-Identifier = "EUPL-1.2"
-
-[[annotations]]
-path = [
+    ".gitignore",
     "README.md",
-    "config.yml",
+    "cal2gancio/**/*.py",
+    "docs/**"
 ]
 SPDX-FileCopyrightText = "Contributors to cal2gancio"
 SPDX-License-Identifier = "EUPL-1.2"
