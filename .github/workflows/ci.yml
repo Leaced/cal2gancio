@@ -31,8 +31,16 @@ permissions:
   actions: read          # codeql-action/upload-sarif: workflow metadata access
 
 jobs:
+  # ── 0. REUSE licence compliance ──────────────────────────────────────────
+  reuse:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: fsfe/reuse-action@v6
+
   # ── 1. Build, push, scan (reusable) ──────────────────────────────────────
   build-push-scan:
+    needs: [reuse]
     uses: ./.github/workflows/_build-scan.yml
     secrets: inherit
 
