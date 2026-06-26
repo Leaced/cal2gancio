@@ -2,53 +2,82 @@
 
 import time
 
-from ..config      import AppConfig, FeedConfig
+from ..config      import AppConfig, FeedConfig, TextConfig
 from ..gancio      import GancioClient, get_token
 from ..sources     import fetch_for_feed
-from .decision     import sync_event
+from .decision     import delete_cancelled_event, sync_event
 
-_ICONS = {"erstellt": "✓", "aktualisiert": "✓", "unverändert": "=", "vergangen": "=", "erstellt (Duplikat)": "⚠"}
+_ICONS = {
+    "erstellt":          "✓",
+    "aktualisiert":      "✓",
+    "gelöscht":          "✓",
+    "unverändert":       "=",
+    "vergangen":         "=",
+    "nicht gefunden":    "=",
+    "erstellt (Duplikat)": "⚠",
+}
 
 
-def sync_feed(feed: FeedConfig, client: GancioClient, global_disclaimer: str = "", global_link_text: str = "Event details") -> None:
+def sync_feed(
+    feed: FeedConfig,
+    client: GancioClient,
+    global_disclaimer: str = "",
+    global_text: TextConfig | None = None,
+) -> None:
+    if global_text is None:
+        global_text = TextConfig()
+
     print(f"\n→ {feed.url}")
-    disclaimer      = feed.disclaimer       if feed.disclaimer       else global_disclaimer
-    event_link_text = feed.event_link_text  if feed.event_link_text  else global_link_text
-    events = fetch_for_feed(feed, disclaimer, event_link_text)
+    disclaimer      = feed.disclaimer      if feed.disclaimer      else global_disclaimer
+    event_link_text = feed.event_link_text if feed.event_link_text else global_text.event_link
+
+    # cancelled_prefix=None signals build_event to skip title prefixing;
+    # the event will be deleted instead of updated.
+    cancelled_prefix = None if feed.delete_cancelled else global_text.cancelled
+
+    events = fetch_for_feed(feed, disclaimer, event_link_text, cancelled_prefix)
 
     if not events:
         print("  (keine Events oder Abruf fehlgeschlagen)")
         return
 
     if feed.ignore_past_events:
-        now = time.time()
+        now    = time.time()
         before = len(events)
         events = [e for e in events if e.get("start_datetime", 0) >= now]
         skipped = before - len(events)
         if skipped:
             print(f"  (vergangene Events übersprungen: {skipped})")
 
-    counts: dict[str, int] = {"erstellt": 0, "aktualisiert": 0, "unverändert": 0, "vergangen": 0, "Duplikat": 0, "Fehler": 0}
+    counts: dict[str, int] = {
+        "erstellt": 0, "aktualisiert": 0, "unverändert": 0,
+        "vergangen": 0, "Duplikat": 0, "gelöscht": 0, "Fehler": 0,
+    }
 
     for event in events:
-        status  = sync_event(event, client)
+        if event.get("_cancelled") and feed.delete_cancelled:
+            status = delete_cancelled_event(event, client)
+        else:
+            status = sync_event(event, client)
+
         icon    = _ICONS.get(status, "✗")
         warning = "" if event.get("_uid_is_real", True) else "  ⚠ kein UID im Feed"
         print(f"  {icon} {event['title']} [{status}]{warning}")
 
         if status == "erstellt (Duplikat)":
             counts["Duplikat"] += 1
-        elif status == "vergangen":
-            counts["vergangen"] += 1
+        elif status in counts:
+            counts[status] += 1
         else:
-            bucket = next((k for k in counts if k in status), "Fehler")
-            counts[bucket] += 1
+            counts["Fehler"] += 1
 
     parts = [
         f"{counts['erstellt']} erstellt",
         f"{counts['aktualisiert']} aktualisiert",
         f"{counts['unverändert']} unverändert",
     ]
+    if counts["gelöscht"]:
+        parts.append(f"{counts['gelöscht']} gelöscht")
     if counts["vergangen"]:
         parts.append(f"{counts['vergangen']} vergangen")
     if counts["Duplikat"]:
@@ -69,6 +98,6 @@ def sync_all(cfg: AppConfig) -> None:
         print("    (Gancio stellt anonyme Events in Pending – Lookup nicht möglich)")
 
     for feed in cfg.feeds:
-        sync_feed(feed, client, global_disclaimer=cfg.disclaimer, global_link_text=cfg.event_link_text)
+        sync_feed(feed, client, global_disclaimer=cfg.disclaimer, global_text=cfg.text)
 
     print("\nFertig.")

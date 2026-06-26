@@ -7,7 +7,10 @@ The returned dict contains:
       _uid_tag      stable lookup tag, e.g. "_ical_abc123def456"
       _hash_tag     content fingerprint tag, e.g. "_icalv_a1b2c3d4"
       _uid_is_real  False if the UID was generated from title+timestamp
+      _exdates      sorted list of excluded recurrence timestamps (for hash only)
 """
+
+from datetime import datetime, timezone
 
 from ..config import FeedConfig
 from .location   import parse_location, parse_geo
@@ -35,25 +38,78 @@ def _assemble_description(body: str, url: str, event_link_text: str, disclaimer:
     return extras_block
 
 
+def _end_from_duration(dtstart_prop, duration_prop) -> int | None:
+    """Compute end Unix timestamp from DTSTART + DURATION."""
+    try:
+        start_dt = dtstart_prop.dt
+        if not isinstance(start_dt, datetime):
+            start_dt = datetime(start_dt.year, start_dt.month, start_dt.day, tzinfo=timezone.utc)
+        elif start_dt.tzinfo is None:
+            start_dt = start_dt.replace(tzinfo=timezone.utc)
+        return int((start_dt + duration_prop.dt).timestamp())
+    except Exception:
+        return None
+
+
+def _parse_exdates(component) -> list[int]:
+    """Return sorted Unix timestamps of all EXDATE entries."""
+    prop = component.get("EXDATE")
+    if not prop:
+        return []
+    if not isinstance(prop, list):
+        prop = [prop]
+    timestamps = []
+    for entry in prop:
+        dts = getattr(entry, "dts", None)
+        if dts is not None:
+            for dt_item in dts:
+                try:
+                    timestamps.append(to_timestamp(dt_item))
+                except Exception:
+                    pass
+        else:
+            try:
+                timestamps.append(to_timestamp(entry))
+            except Exception:
+                pass
+    return sorted(set(timestamps))
+
+
 def build_event(
     component,
     feed: FeedConfig,
     disclaimer: str = "",
     event_link_text: str = "Event details",
+    cancelled_prefix: str | None = "Cancelled: ",
 ) -> dict | None:
     """
     Convert a VEVENT to a Gancio event dict.
     Returns None if the component has no DTSTART (unparseable).
+
+    If STATUS:CANCELLED and cancelled_prefix is set, the title is prefixed and
+    _cancelled=True is injected. If cancelled_prefix is None, _cancelled=True is
+    set but the title is left unchanged (caller will delete the event instead).
     """
     dtstart = component.get("DTSTART")
     if not dtstart:
         return None
 
-    start_ts = to_timestamp(dtstart)
-    title    = str(component.get("SUMMARY", "(kein Titel)")).strip()
+    start_ts  = to_timestamp(dtstart)
+    title     = str(component.get("SUMMARY", "(kein Titel)")).strip()
+    cancelled = str(component.get("STATUS", "")).strip().upper() == "CANCELLED"
+    if cancelled and cancelled_prefix is not None:
+        title = cancelled_prefix + title
 
-    dtend     = component.get("DTEND")
-    multidate = int(dtend is not None and to_timestamp(dtend) - start_ts > 86400)
+    dtend = component.get("DTEND")
+    if dtend is not None:
+        multidate = int(to_timestamp(dtend) - start_ts > 86400)
+    else:
+        duration = component.get("DURATION")
+        if duration is not None:
+            end_ts    = _end_from_duration(dtstart, duration)
+            multidate = int(end_ts is not None and end_ts - start_ts > 86400)
+        else:
+            multidate = 0
 
     # Recurrence → Gancio flat keys
     recurrent   = parse_recurrent(component)
@@ -65,6 +121,7 @@ def build_event(
 
     user_tags = parse_categories(component, feed)
     image_url = parse_image_url(component)
+    exdates   = _parse_exdates(component)
 
     url         = str(component.get("URL", "")).strip()
     description = str(component.get("DESCRIPTION", "")).strip()
@@ -82,6 +139,10 @@ def build_event(
         event["tags"] = user_tags
     if image_url:
         event["image_url"] = image_url
+    if exdates:
+        event["_exdates"] = exdates
+    if cancelled:
+        event["_cancelled"] = True
     event.update(rec_fields)
 
     # Derive identity and content fingerprint

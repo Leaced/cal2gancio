@@ -51,6 +51,7 @@ def content_hash(event: dict) -> str:
     stable["tags"] = sorted(
         t for t in (event.get("tags") or []) if not is_internal(t)
     )
+    stable["exdates"] = event.get("_exdates") or []
     raw = json.dumps(stable, sort_keys=True, default=str).encode()
     return hashlib.sha256(raw).hexdigest()[:8]
 

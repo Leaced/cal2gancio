@@ -68,6 +68,24 @@ class GancioClient:
             error=f"HTTP {resp.status_code}: {resp.text[:200]}",
         )
 
+    def delete_event(self, gancio_id: int) -> ApiResult:
+        """DELETE /api/event/{id} – remove an event."""
+        resp, err = self._write(
+            lambda gid=gancio_id: requests.delete(
+                f"{self._base}/api/event/{gid}",
+                headers=self._headers,
+                timeout=20,
+            )
+        )
+        if err:
+            return ApiResult(success=False, gancio_id=gancio_id, error=err)
+        if resp.status_code in (200, 204):
+            return ApiResult(success=True, gancio_id=gancio_id)
+        return ApiResult(
+            success=False, gancio_id=gancio_id,
+            error=f"HTTP {resp.status_code}: {resp.text[:200]}",
+        )
+
     def update_event(self, gancio_id: int, event: dict) -> ApiResult:
         """
         PUT /api/event – update an existing event.

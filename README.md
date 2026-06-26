@@ -51,25 +51,41 @@ sources:
 | `password_file` | –        | Path to a file containing the password (default: `/run/secrets/gancio_password`) |
 | `wait`          | –        | Seconds to wait between write requests; use when hitting HTTP 429 (default: `0`) |
 
+### `text:` section
+
+Language-specific strings. All keys are optional.
+
+| Key         | Description                                                          | Default          |
+| ----------- | -------------------------------------------------------------------- | ---------------- |
+| `event_link`| Link text for the iCal `URL` field                                   | `"Event details"`|
+| `cancelled` | Prefix added to the title of `STATUS:CANCELLED` events               | `"Cancelled: "`  |
+
+```yaml
+text:
+  event_link: "Zur Veranstaltung"
+  cancelled: "Abgesagt: "
+```
+
 ### Top-level keys
 
-| Key               | Required | Description                                                                   |
-| ----------------- | -------- | ----------------------------------------------------------------------------- |
-| `sources`         | ✓        | List of feeds (see below)                                                     |
-| `disclaimer`      | –        | HTML fallback disclaimer; appended to every event without a per-feed override |
-| `event_link_text` | –        | Link text for the iCal `URL` field (default: `"Event details"`)               |
+| Key          | Required | Description                                                                   |
+| ------------ | -------- | ----------------------------------------------------------------------------- |
+| `sources`    | ✓        | List of feeds (see below)                                                     |
+| `disclaimer` | –        | HTML fallback disclaimer; appended to every event without a per-feed override |
+| `text`       | –        | Language-specific strings (see `text:` section above)                         |
 
 Per feed (`sources` entries):
 
-| Key                     | Required | Description                                                   |
-| ----------------------- | -------- | ------------------------------------------------------------- |
-| `url`                   | ✓        | iCal feed URL                                                 |
-| `default_place_name`    | –        | Used when the feed has no `LOCATION` field                    |
-| `default_place_address` | –        | Used when the feed has no `LOCATION` field                    |
-| `additional_tags`       | –        | Tags added to every event from this feed                      |
-| `disclaimer`            | –        | HTML appended to every event from this feed; overrides global |
-| `event_link_text`       | –        | Link text for the `URL` field of this feed; overrides global  |
-| `ignore_past_events`    | –        | Skip events whose start time is in the past (default: `true`) |
+| Key                     | Required | Description                                                                          |
+| ----------------------- | -------- | ------------------------------------------------------------------------------------ |
+| `url`                   | ✓        | iCal feed URL                                                                        |
+| `default_place_name`    | –        | Used when the feed has no `LOCATION` field                                           |
+| `default_place_address` | –        | Used when the feed has no `LOCATION` field                                           |
+| `additional_tags`       | –        | Tags added to every event from this feed                                             |
+| `disclaimer`            | –        | HTML appended to every event from this feed; overrides global                        |
+| `event_link_text`       | –        | Link text for the `URL` field of this feed; overrides `text.event_link`              |
+| `ignore_past_events`    | –        | Skip events whose start time is in the past (default: `true`)                        |
+| `delete_cancelled`      | –        | Delete `STATUS:CANCELLED` events from Gancio; if `false`, prefix title (default: `false`) |
 
 The `disclaimer` field accepts HTML. Use `<br>` for line breaks. YAML `>-` is recommended so `<br>` stays in the string while source lines can wrap:
 
@@ -225,7 +241,11 @@ The third case creates a duplicate because `PUT /api/event` always requires auth
 | `CATEGORIES`          | `tags`                                           |
 | `ATTACH` (image URL)  | `image_url`                                      |
 | `URL`                 | link in description (text via `event_link_text`) |
-| `RRULE` (weekly only) | `recurrent[frequency]` / `recurrent[days]`       |
+| `DURATION`            | used for `multidate` when `DTEND` is absent      |
+| `EXDATE`              | excluded recurrence dates (tracked in content hash; Gancio receives no native EXDATE) |
+| `RRULE` weekly        | `recurrent[frequency]` `1w` / `2w`               |
+| `RRULE` monthly       | `recurrent[frequency]` `1m` / `2m` (no `BYDAY`)  |
+| `RRULE` yearly        | `recurrent[frequency]` `1y`                      |
 
 ## Project structure
 

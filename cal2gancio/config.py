@@ -4,11 +4,16 @@ config.py – Load and validate /opt/cal2gancio/config.yml.
 Config file structure:
     gancio:
       url: https://demo.gancio.org
-      username: admin@example.org       # optional, omit for anonymous posting
-      password_file: /run/secrets/gancio_password  # optional
-      wait: 2.0                         # seconds between writes, default 0
+      version: 1                          # 1 = Gancio ≤1.x, 2 = Gancio ≥2.x (default)
+      username: admin@example.org         # optional, omit for anonymous posting
+      password_file: /run/secrets/gancio_password
+      wait: 2.0
 
-    disclaimer: "<em>Importiert via cal2gancio.</em>"  # optional, global fallback
+    text:
+      event_link: "Event details"         # link text for iCal URL field
+      cancelled: "Cancelled: "            # prefix for STATUS:CANCELLED events
+
+    disclaimer: "<em>Importiert via cal2gancio.</em>"
 
     sources:
       - url: https://example.org/events/?ical=1
@@ -16,7 +21,8 @@ Config file structure:
         default_place_address: Murnaustraße 1, 65189 Wiesbaden
         additional_tags:
           - kreativfabrik
-        disclaimer: "<em>Quelle: Kreativfabrik</em>"  # optional, overrides global
+        disclaimer: "<em>Quelle: Kreativfabrik</em>"
+        delete_cancelled: false
       - url: https://other.org/feed.ics
 """
 
@@ -35,6 +41,12 @@ CONFIG_PATH = Path("/opt/cal2gancio/config.yml")
 
 
 @dataclass
+class TextConfig:
+    event_link: str = "Event details"
+    cancelled: str = "Cancelled: "
+
+
+@dataclass
 class FeedConfig:
     url: str
     source_type: SourceType = SourceType.ICAL
@@ -44,6 +56,7 @@ class FeedConfig:
     disclaimer: str = ""
     event_link_text: str = ""
     ignore_past_events: bool = True
+    delete_cancelled: bool = False
 
 
 @dataclass
@@ -54,7 +67,7 @@ class AppConfig:
     password: str
     request_delay: float
     disclaimer: str
-    event_link_text: str
+    text: TextConfig
     feeds: list[FeedConfig]
 
 
@@ -86,7 +99,13 @@ def load() -> AppConfig:
             sys.exit(1)
 
     gancio_version = int(gancio.get("version", 2))
-    request_delay = float(gancio.get("wait", 0.0))
+    request_delay  = float(gancio.get("wait", 0.0))
+
+    text_raw = raw.get("text") or {}
+    text = TextConfig(
+        event_link=text_raw.get("event_link", "Event details"),
+        cancelled=text_raw.get("cancelled", "Cancelled: "),
+    )
 
     feeds = [
         FeedConfig(
@@ -97,6 +116,7 @@ def load() -> AppConfig:
             disclaimer=entry.get("disclaimer", ""),
             event_link_text=entry.get("event_link_text", ""),
             ignore_past_events=bool(entry.get("ignore_past_events", True)),
+            delete_cancelled=bool(entry.get("delete_cancelled", False)),
         )
         for entry in raw["sources"]
         if entry.get("url")
@@ -109,6 +129,6 @@ def load() -> AppConfig:
         password=password,
         request_delay=request_delay,
         disclaimer=raw.get("disclaimer", ""),
-        event_link_text=raw.get("event_link_text", "Event details"),
+        text=text,
         feeds=feeds,
     )

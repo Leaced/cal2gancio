@@ -63,6 +63,21 @@ def sync_event(event: dict, client: GancioClient) -> str:
     return "aktualisiert" if result.success else f"Fehler: {result.error}"
 
 
+def delete_cancelled_event(event: dict, client: GancioClient) -> str:
+    """
+    Find the event in Gancio by uid tag and delete it.
+    Returns a short status string for logging.
+    """
+    existing = client.find_by_uid_tag(event["_uid_tag"])
+    if existing is None:
+        return "nicht gefunden"
+    gancio_id = existing.get("id")
+    if not gancio_id:
+        return "Fehler: keine ID"
+    result = client.delete_event(gancio_id)
+    return "gelöscht" if result.success else f"Fehler: {result.error}"
+
+
 def _is_past(event: dict) -> bool:
     return event.get("start_datetime", 0) < time.time()
 
