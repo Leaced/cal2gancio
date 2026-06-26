@@ -8,6 +8,19 @@ Images are published to the GitHub Container Registry for amd64 and arm64:
 podman pull ghcr.io/leaced/cal2gancio:latest
 ```
 
+### Verifying image signatures
+
+All images pushed to `main` are signed with [Cosign](https://github.com/sigstore/cosign) using keyless signing via GitHub Actions OIDC. No key management is required to verify.
+
+```bash
+cosign verify \
+  --certificate-identity-regexp "https://github.com/Leaced/cal2gancio/.*" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  ghcr.io/leaced/cal2gancio:latest
+```
+
+The signature is recorded in the [Sigstore transparency log](https://rekor.sigstore.dev) and can be inspected independently of GitHub.
+
 ## Password setup
 
 The password is read from a file whose path is set by `password_file` in `config.yml`.
