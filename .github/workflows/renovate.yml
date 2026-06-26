@@ -17,4 +17,4 @@ jobs:
         with:
           token: ${{ secrets.RENOVATE_TOKEN }}
         env:
-          RENOVATE_AUTODISCOVER: 'true'
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
