@@ -22,6 +22,7 @@ from collections.abc import Callable
 from ..config import FeedConfig, FilterConfig, SourceType, TextConfig
 from .ical.fetch import fetch_events as _ical_fetch
 from .html.fetch import fetch_events as _html_fetch
+from .ical.tags import hash_tag, content_hash, is_internal
 
 FetchFn = Callable[[FeedConfig, str, str], list[dict]]
 
@@ -49,6 +50,7 @@ def _postprocess(events: list[dict], feed: FeedConfig, text: TextConfig) -> list
     events = _apply_filter(events, feed.filter)
     events = _apply_past_filter(events, feed)
     events = _apply_cancelled(events, feed, text)
+    events = _apply_content_hash(events)
     return events
 
 
@@ -82,6 +84,17 @@ def _apply_past_filter(events: list[dict], feed: FeedConfig) -> list[dict]:
         return events
     now = time.time()
     return [e for e in events if e.get("start_datetime", 0) >= now]
+
+
+def _apply_content_hash(events: list[dict]) -> list[dict]:
+    for event in events:
+        user_tags = [t for t in (event.get("tags") or []) if not is_internal(t)]
+        uid_tags  = [t for t in (event.get("tags") or []) if t.startswith("_ical_")]
+        event["tags"] = user_tags  # strip any stale hash tag before computing
+        _hash = hash_tag(content_hash(event))
+        event["_hash_tag"] = _hash
+        event["tags"] = user_tags + uid_tags + [_hash]
+    return events
 
 
 def _apply_cancelled(events: list[dict], feed: FeedConfig, text: TextConfig) -> list[dict]:

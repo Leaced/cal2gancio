@@ -9,7 +9,7 @@ Priority when both sources are configured:
 import sys
 
 from ...config import FeedConfig
-from ..ical.tags import uid_tag, hash_tag, content_hash, is_internal
+from ..ical.tags import uid_tag, is_internal
 from .discover import discover_event_urls
 from .extract import fetch_detail, extract_field, parse_datetime, slug_from_url
 from .ical_fallback import fetch_ical_event
@@ -124,10 +124,9 @@ def fetch_events(
             end   = event.get("end_datetime", 0)
             event["multidate"] = int(end - start > 86400) if end else 0
 
-        # --- 9. UID + content hash -------------------------------------------
+        # --- 9. UID (content hash is computed later, after post-processing) ---
         # iCal UID takes priority over URL-derived UID.
-        internal_tags = [t for t in (event.get("tags") or []) if is_internal(t)]
-        user_tags     = [t for t in (event.get("tags") or []) if not is_internal(t)]
+        user_tags = [t for t in (event.get("tags") or []) if not is_internal(t)]
 
         if ical_uid_tag:
             _uid = ical_uid_tag
@@ -136,14 +135,9 @@ def fetch_events(
             _uid = uid_tag(event_url)
             uid_is_real = False
 
-        # Recompute hash (HTML fields may have changed content)
-        event["tags"] = user_tags  # strip old internal tags before hashing
-        _hash = hash_tag(content_hash(event))
-
         event["_uid_tag"]     = _uid
-        event["_hash_tag"]    = _hash
         event["_uid_is_real"] = uid_is_real
-        event["tags"]         = user_tags + [_uid, _hash]
+        event["tags"]         = user_tags + [_uid]
 
         events.append(event)
 

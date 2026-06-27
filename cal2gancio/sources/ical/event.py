@@ -16,7 +16,7 @@ from ...config import FeedConfig
 from .location   import parse_location, parse_geo
 from .media      import parse_image_url
 from .recurrence import parse_recurrent
-from .tags       import parse_categories, uid_tag, hash_tag, content_hash
+from .tags       import parse_categories, uid_tag
 from .timestamps import to_timestamp
 
 _SEP  = "—" * 30
@@ -141,19 +141,15 @@ def build_event(
         event["_cancelled"] = True
     event.update(rec_fields)
 
-    # Derive identity and content fingerprint
+    # Derive stable identity (content hash is computed later, after post-processing)
     raw_uid     = str(component.get("UID", "")).strip()
     uid_is_real = bool(raw_uid)
     uid         = raw_uid if uid_is_real else f"noid::{title}::{start_ts}"
 
-    _uid_tag  = uid_tag(uid)
-    _hash_tag = hash_tag(content_hash(event))
+    _uid_tag = uid_tag(uid)
 
-    # Inject internal tags into the tag list (sent to Gancio, used for lookup)
-    event["tags"] = (event.get("tags") or []) + [_uid_tag, _hash_tag]
-
+    event["tags"]         = (event.get("tags") or []) + [_uid_tag]
     event["_uid_tag"]     = _uid_tag
-    event["_hash_tag"]    = _hash_tag
     event["_uid_is_real"] = uid_is_real
 
     return event
