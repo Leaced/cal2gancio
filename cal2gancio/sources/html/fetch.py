@@ -18,6 +18,14 @@ from .extract import fetch_detail, extract_field, parse_datetime, slug_from_url
 from .ical_fallback import fetch_ical_event
 
 _DATETIME_FIELDS = {"start_datetime", "end_datetime"}
+_BAR_WIDTH = 25
+
+
+def _progress(current: int, total: int, url: str) -> None:
+    filled = int(_BAR_WIDTH * current / total) if total else _BAR_WIDTH
+    bar    = "█" * filled + "░" * (_BAR_WIDTH - filled)
+    slug   = url.rstrip("/").split("/")[-1]
+    print(f"\r  [{bar}] {current}/{total}  {slug}", end="", flush=True)
 
 
 def fetch_events(feed: FeedConfig) -> list[dict]:
@@ -36,8 +44,15 @@ def fetch_events(feed: FeedConfig) -> list[dict]:
         print(f"  html: Fehler beim Laden der Listing-Seite: {e}", file=sys.stderr)
         return []
 
+    if cfg.max_events:
+        event_entries = event_entries[: cfg.max_events]
+
+    total = len(event_entries)
+    print(f"  html: {total} Events werden verarbeitet")
+
     events = []
-    for event_url, event_id in event_entries:
+    for i, (event_url, event_id) in enumerate(event_entries, 1):
+        _progress(i, total, event_url)
         slug = slug_from_url(event_url)
 
         # --- 1. Optional iCal as base -----------------------------------------
@@ -124,4 +139,5 @@ def fetch_events(feed: FeedConfig) -> list[dict]:
 
         events.append(event)
 
+    print()  # Newline nach der Progress-Bar
     return events

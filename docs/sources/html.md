@@ -37,6 +37,9 @@ sources:
       # Sets _cancelled=True; post-processor applies prefix or delete per feed config
       cancelled_selector: "img[alt='Fällt aus']"
 
+      # Optional: limit the number of events fetched (0 = unlimited)
+      max_events: 50
+
       # Optional: apply tags and/or title prefixes when a CSS selector matches
       # Both "tag" and "title_prefix" are optional; use either or both.
       status_selectors:

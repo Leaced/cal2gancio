@@ -64,6 +64,7 @@ class HtmlConfig:
     cancelled_selector: str = ""
     status_selectors: list[StatusSelector] = field(default_factory=list)
     fields: dict[str, FieldSelector] = field(default_factory=dict)
+    max_events: int = 0            # 0 = unlimited
 
 
 @dataclass
@@ -136,6 +137,7 @@ def _parse_html_config(raw: dict) -> HtmlConfig:
         cancelled_selector=raw.get("cancelled_selector", ""),
         status_selectors=status_selectors,
         fields=_parse_field_selectors(raw.get("fields") or {}),
+        max_events=int(raw.get("max_events", 0)),
     )
 
 
