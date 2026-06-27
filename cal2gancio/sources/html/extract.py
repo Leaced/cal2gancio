@@ -16,12 +16,16 @@ def fetch_detail(url: str) -> BeautifulSoup:
     return BeautifulSoup(resp.text, "html.parser")
 
 
-def extract_field(soup: BeautifulSoup, fs: FieldSelector) -> str:
+def extract_field(soup: BeautifulSoup, fs: FieldSelector, page_url: str = "") -> str:
     el = soup.select_one(fs.selector)
     if el is None:
         return ""
     if fs.attribute:
-        return el.get(fs.attribute, "").strip()
+        value = el.get(fs.attribute, "").strip()
+        if value and page_url and value.startswith("/"):
+            from urllib.parse import urljoin
+            value = urljoin(page_url, value)
+        return value
     if fs.as_html:
         return el.decode_contents().strip()
     return el.get_text(separator=" ", strip=True)

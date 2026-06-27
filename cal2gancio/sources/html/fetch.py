@@ -66,11 +66,11 @@ def fetch_events(feed: FeedConfig) -> list[dict]:
         if soup is not None:
             for field_name, fs in cfg.fields.items():
                 if field_name in _DATETIME_FIELDS:
-                    ts = parse_datetime(extract_field(soup, fs), fs.format)
+                    ts = parse_datetime(extract_field(soup, fs, event_url), fs.format)
                     if ts is not None:
                         event[field_name] = ts
                 else:
-                    val = extract_field(soup, fs)
+                    val = extract_field(soup, fs, event_url)
                     if val:
                         event[field_name] = val
 
