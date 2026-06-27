@@ -19,25 +19,6 @@ from .recurrence import parse_recurrent
 from .tags       import parse_categories, uid_tag
 from .timestamps import to_timestamp
 
-_SEP  = "—" * 30
-_PARA = "<br><br>"
-
-
-def _assemble_description(body: str, url: str, event_link_text: str, disclaimer: str) -> str:
-    url_part = f'<a href="{url}">{event_link_text}</a>' if url else ""
-    extras   = [p for p in [url_part, disclaimer] if p]
-
-    if not extras:
-        return body
-
-    extras_block = _PARA.join(extras)
-
-    if body:
-        return f"{body}{_PARA}{_SEP}{_PARA}{extras_block}"
-
-    return extras_block
-
-
 def _end_from_duration(dtstart_prop, duration_prop) -> int | None:
     """Compute end Unix timestamp from DTSTART + DURATION."""
     try:
@@ -78,12 +59,13 @@ def _parse_exdates(component) -> list[int]:
 def build_event(
     component,
     feed: FeedConfig,
-    disclaimer: str = "",
-    event_link_text: str = "Event details",
 ) -> dict | None:
     """
     Convert a VEVENT to a Gancio event dict.
     Returns None if the component has no DTSTART (unparseable).
+
+    Sets event["_event_url"] when the VEVENT has a URL field; the post-processor
+    will render it as a clickable link appended after the description body.
 
     STATUS:CANCELLED sets _cancelled=True; title prefixing and delete decisions
     are handled by the source dispatcher post-processor, not here.
@@ -121,7 +103,6 @@ def build_event(
 
     url         = str(component.get("URL", "")).strip()
     description = str(component.get("DESCRIPTION", "")).strip()
-    description = _assemble_description(description, url, event_link_text, disclaimer)
 
     event: dict = {
         "title":          title,
@@ -139,6 +120,8 @@ def build_event(
         event["_exdates"] = exdates
     if cancelled:
         event["_cancelled"] = True
+    if url:
+        event["_event_url"] = url
     event.update(rec_fields)
 
     # Derive stable identity (content hash is computed later, after post-processing)

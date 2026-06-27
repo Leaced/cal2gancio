@@ -9,11 +9,7 @@ from ...config import FeedConfig
 from .event   import build_event
 
 
-def fetch_events(
-    feed: FeedConfig,
-    disclaimer: str = "",
-    event_link_text: str = "Event details",
-) -> list[dict]:
+def fetch_events(feed: FeedConfig) -> list[dict]:
     """
     Download the iCal feed and return a list of normalized Gancio event dicts.
     Returns [] on HTTP or parse errors (error printed to stderr).
@@ -40,7 +36,7 @@ def fetch_events(
         # separately when we add cancellation support.
         if component.get("RECURRENCE-ID"):
             continue
-        event = build_event(component, feed, disclaimer, event_link_text)
+        event = build_event(component, feed)
         if event is not None:
             events.append(event)
 

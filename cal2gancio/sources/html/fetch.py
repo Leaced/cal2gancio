@@ -4,6 +4,9 @@ from an optional per-event iCal file and/or HTML CSS selectors.
 
 Priority when both sources are configured:
     explicit HTML selector value  >  iCal value
+
+Sets event["_event_url"] to the event page URL so the post-processor can
+render a clickable link appended after the description body.
 """
 
 import sys
@@ -14,26 +17,10 @@ from .discover import discover_event_urls
 from .extract import fetch_detail, extract_field, parse_datetime, slug_from_url
 from .ical_fallback import fetch_ical_event
 
-_SEP  = "—" * 30
-_PARA = "<br><br>"
-
 _DATETIME_FIELDS = {"start_datetime", "end_datetime"}
 
 
-def _append_disclaimer(description: str, event_url: str, event_link_text: str, disclaimer: str) -> str:
-    link = f'<a href="{event_url}">{event_link_text}</a>' if event_url and event_link_text else ""
-    extras = [p for p in [link, disclaimer] if p]
-    if not extras:
-        return description
-    block = _PARA.join(extras)
-    return f"{description}{_PARA}{_SEP}{_PARA}{block}" if description else block
-
-
-def fetch_events(
-    feed: FeedConfig,
-    disclaimer: str = "",
-    event_link_text: str = "Event details",
-) -> list[dict]:
+def fetch_events(feed: FeedConfig) -> list[dict]:
     cfg = feed.html
     if not cfg.event_link_selector:
         print("  html: event_link_selector ist nicht konfiguriert", file=sys.stderr)
@@ -56,18 +43,12 @@ def fetch_events(
         # --- 1. Optional iCal as base -----------------------------------------
         event: dict = {}
         ical_uid_tag: str | None = None
-        html_overrides_description = "description" in cfg.fields
 
         if cfg.ical_url_pattern:
             ical_url = cfg.ical_url_pattern.format(
                 base=base_url, slug=slug, event_id=event_id or slug
             )
-            ical_event = fetch_ical_event(
-                ical_url, feed,
-                # Pass empty disclaimer/link here; we assemble them below after
-                # HTML overrides so the final text reflects all enriched fields.
-                disclaimer="", event_link_text="",
-            )
+            ical_event = fetch_ical_event(ical_url, feed)
             if ical_event:
                 event = ical_event
                 ical_uid_tag = ical_event.get("_uid_tag")
@@ -111,12 +92,8 @@ def fetch_events(
             print(f"  html: Überspringe {event_url} — Titel oder Startzeit fehlt", file=sys.stderr)
             continue
 
-        # --- 7. Assemble description with link + disclaimer -------------------
-        # Only reassemble when HTML provided the description body (iCal already
-        # assembled its own description when no HTML description selector is set).
-        if html_overrides_description or not cfg.ical_url_pattern:
-            body = event.get("description", "")
-            event["description"] = _append_disclaimer(body, event_url, event_link_text, disclaimer)
+        # --- 7. Event URL for post-processor description assembly -------------
+        event["_event_url"] = event_url
 
         # --- 8. Compute multidate from start/end if not already set -----------
         if "multidate" not in event:

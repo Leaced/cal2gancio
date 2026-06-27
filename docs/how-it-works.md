@@ -23,7 +23,9 @@ flowchart TD
         PlaceDef[Apply default place\nname / address] -->
         TitleFilter["Title filter\ninclude → exclude"] -->
         PastFilter[Remove past events\nif ignore_past_events] -->
-        CancelledPost["Cancelled events:\nprefix title or mark for delete"]
+        CancelledPost["Cancelled events:\nprefix title or mark for delete"] -->
+        DescAssembly["Assemble description\nbody + link + disclaimer"] -->
+        ContentHash["Compute content hash\n_icalv_"]
     end
 
     Post --> Sync
