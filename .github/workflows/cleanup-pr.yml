@@ -3,6 +3,11 @@ name: Cleanup PR images
 on:
   pull_request:
     types: [closed]
+    paths-ignore:
+      - '**.md'
+      - 'config.yml'
+      - '.github/**'
+      - 'renovate.json'
 
 jobs:
   cleanup:
