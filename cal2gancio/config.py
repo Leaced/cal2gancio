@@ -58,7 +58,8 @@ class TagSelector:
 @dataclass
 class HtmlConfig:
     event_link_selector: str = ""
-    ical_url_pattern: str = ""   # optional; placeholders: {base}, {slug}
+    event_id_attribute: str = ""  # HTML attribute on the link element to use as {event_id} in ical_url_pattern
+    ical_url_pattern: str = ""    # optional; placeholders: {base}, {slug}, {event_id}
     cancelled_selector: str = ""
     tag_selectors: list[TagSelector] = field(default_factory=list)
     fields: dict[str, FieldSelector] = field(default_factory=dict)
@@ -125,6 +126,7 @@ def _parse_html_config(raw: dict) -> HtmlConfig:
     ]
     return HtmlConfig(
         event_link_selector=raw.get("event_link_selector", ""),
+        event_id_attribute=raw.get("event_id_attribute", ""),
         ical_url_pattern=raw.get("ical_url_pattern", ""),
         cancelled_selector=raw.get("cancelled_selector", ""),
         tag_selectors=tag_selectors,

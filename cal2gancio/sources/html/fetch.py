@@ -42,13 +42,15 @@ def fetch_events(
     base_url = feed.url.rstrip("/")
 
     try:
-        event_urls = discover_event_urls(feed.url, cfg.event_link_selector)
+        event_entries = discover_event_urls(
+            feed.url, cfg.event_link_selector, cfg.event_id_attribute
+        )
     except Exception as e:
         print(f"  html: Fehler beim Laden der Listing-Seite: {e}", file=sys.stderr)
         return []
 
     events = []
-    for event_url in event_urls:
+    for event_url, event_id in event_entries:
         slug = slug_from_url(event_url)
 
         # --- 1. Optional iCal as base -----------------------------------------
@@ -57,7 +59,9 @@ def fetch_events(
         html_overrides_description = "description" in cfg.fields
 
         if cfg.ical_url_pattern:
-            ical_url = cfg.ical_url_pattern.format(base=base_url, slug=slug)
+            ical_url = cfg.ical_url_pattern.format(
+                base=base_url, slug=slug, event_id=event_id or slug
+            )
             ical_event = fetch_ical_event(
                 ical_url, feed,
                 # Pass empty disclaimer/link here; we assemble them below after

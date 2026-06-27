@@ -23,9 +23,15 @@ sources:
       # Required: CSS selector that matches <a> links to individual event pages
       event_link_selector: "a[href*='/events/']"
 
+      # Optional: HTML attribute on the link element to use as {event_id}
+      # in ical_url_pattern (e.g. "data-event-id")
+      event_id_attribute: "data-event-id"
+
       # Optional: URL pattern for per-event iCal files
-      # {base} = feed url without trailing slash, {slug} = last URL path segment
-      ical_url_pattern: "{base}/ics/{slug}.ics"
+      # {base} = feed url without trailing slash
+      # {slug} = last URL path segment of the event page
+      # {event_id} = value of event_id_attribute (falls back to {slug} if not set)
+      ical_url_pattern: "{base}/?method=ical&id={event_id}"
 
       # Optional: CSS selector whose presence marks the event as cancelled
       # Sets _cancelled=True; post-processor applies prefix or delete per feed config
@@ -59,6 +65,14 @@ sources:
         place_address:
           selector: ".venue-address"
 ```
+
+## `ical_url_pattern` placeholders
+
+| Placeholder  | Value |
+| ------------ | ----- |
+| `{base}`     | Feed URL without trailing slash |
+| `{slug}`     | Last path segment of the event page URL |
+| `{event_id}` | Value of `event_id_attribute` on the listing link; falls back to `{slug}` if not configured |
 
 ## Field selector options
 
