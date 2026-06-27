@@ -1,5 +1,6 @@
 """Extracts field values from a BeautifulSoup document using FieldSelectors."""
 
+import re
 from datetime import datetime, timezone
 
 import requests
@@ -16,6 +17,12 @@ def fetch_detail(url: str) -> BeautifulSoup:
     return BeautifulSoup(resp.text, "html.parser")
 
 
+_BLOCK_TAGS = re.compile(
+    r"<br\s*/?>|</(p|div|h[1-6]|li|tr|blockquote)>",
+    re.IGNORECASE,
+)
+
+
 def extract_field(soup: BeautifulSoup, fs: FieldSelector, page_url: str = "") -> str:
     el = soup.select_one(fs.selector)
     if el is None:
@@ -28,7 +35,9 @@ def extract_field(soup: BeautifulSoup, fs: FieldSelector, page_url: str = "") ->
         return value
     if fs.as_html:
         return el.decode_contents().strip()
-    return el.get_text(separator=" ", strip=True)
+    # Insert newlines only at block boundaries, not around inline tags
+    raw = _BLOCK_TAGS.sub("\n", str(el))
+    return BeautifulSoup(raw, "html.parser").get_text(separator="", strip=True).strip()
 
 
 def parse_datetime(text: str, fmt: str) -> int | None:

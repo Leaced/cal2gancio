@@ -29,8 +29,31 @@ from .ical.fetch import fetch_events as _ical_fetch
 from .html.fetch import fetch_events as _html_fetch
 from .ical.tags import hash_tag, content_hash, is_internal
 
-_SEP  = "—" * 30
+import re
+
+_SEP  = "—" * 29
 _PARA = "<br><br>"
+
+
+_TRAILING_BR = re.compile(r"(\s*<br\s*/?>)+\s*$", re.IGNORECASE)
+
+
+def _to_html(text: str) -> str:
+    """Normalise a description to HTML for Gancio.
+
+    HTML (contains '<'): returned as-is, trailing <br> stripped.
+    Plain text: \n → <br>, 3+ consecutive \n capped at 2 (= <br><br>).
+    No <p> tags — avoids CSS margin adding unexpected spacing.
+    """
+    if not text:
+        return text
+    if "<" in text:
+        return _TRAILING_BR.sub("", text).strip()
+    text = text.strip()
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = text.replace("\n\n", "<br><br>")
+    text = text.replace("\n", "<br>")
+    return text
 
 FetchFn = Callable[[FeedConfig], list[dict]]
 
@@ -118,7 +141,7 @@ def _apply_description(
     disclaimer: str,
 ) -> list[dict]:
     for event in events:
-        body = event.get("description", "")
+        body = _to_html(event.get("description", ""))
         url  = event.pop("_event_url", "")
         link = f'<a href="{url}">{event_link_text}</a>' if (url and event_link_text) else ""
         extras = [p for p in [link, disclaimer] if p]
