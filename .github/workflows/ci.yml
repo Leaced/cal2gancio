@@ -31,6 +31,7 @@ permissions:
   pull-requests: write   # semantic-release: comment on PRs
   security-events: write # trivy: upload SARIF to GitHub Security tab
   actions: read          # codeql-action/upload-sarif: workflow metadata access
+  id-token: write        # cosign keyless signing via OIDC (passed to reusable workflow)
 
 jobs:
   # ── 0. REUSE licence compliance ──────────────────────────────────────────
