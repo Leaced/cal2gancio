@@ -3,6 +3,7 @@ name: Trivy scheduled scan
 on:
   schedule:
     - cron: '0 4 * * *'   # daily at 04:00 UTC, after Trivy DB update
+  workflow_dispatch:
 
 jobs:
   scan:
