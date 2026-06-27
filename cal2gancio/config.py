@@ -50,18 +50,19 @@ class FieldSelector:
 
 
 @dataclass
-class TagSelector:
+class StatusSelector:
     selector: str
-    tag: str
+    tag: str = ""           # Gancio tag added when selector matches
+    title_prefix: str = ""  # prepended to event title when selector matches
 
 
 @dataclass
 class HtmlConfig:
     event_link_selector: str = ""
-    event_id_attribute: str = ""  # HTML attribute on the link element to use as {event_id} in ical_url_pattern
-    ical_url_pattern: str = ""    # optional; placeholders: {base}, {slug}, {event_id}
+    event_id_attribute: str = ""   # HTML attribute on the link element to use as {event_id} in ical_url_pattern
+    ical_url_pattern: str = ""     # optional; placeholders: {base}, {slug}, {event_id}
     cancelled_selector: str = ""
-    tag_selectors: list[TagSelector] = field(default_factory=list)
+    status_selectors: list[StatusSelector] = field(default_factory=list)
     fields: dict[str, FieldSelector] = field(default_factory=dict)
 
 
@@ -120,16 +121,20 @@ def _parse_field_selectors(raw: dict) -> dict[str, FieldSelector]:
 
 
 def _parse_html_config(raw: dict) -> HtmlConfig:
-    tag_selectors = [
-        TagSelector(selector=item["selector"], tag=item["tag"])
-        for item in (raw.get("tag_selectors") or [])
+    status_selectors = [
+        StatusSelector(
+            selector=item["selector"],
+            tag=item.get("tag", ""),
+            title_prefix=item.get("title_prefix", ""),
+        )
+        for item in (raw.get("status_selectors") or [])
     ]
     return HtmlConfig(
         event_link_selector=raw.get("event_link_selector", ""),
         event_id_attribute=raw.get("event_id_attribute", ""),
         ical_url_pattern=raw.get("ical_url_pattern", ""),
         cancelled_selector=raw.get("cancelled_selector", ""),
-        tag_selectors=tag_selectors,
+        status_selectors=status_selectors,
         fields=_parse_field_selectors(raw.get("fields") or {}),
     )
 

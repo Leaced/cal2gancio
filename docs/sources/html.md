@@ -37,12 +37,15 @@ sources:
       # Sets _cancelled=True; post-processor applies prefix or delete per feed config
       cancelled_selector: "img[alt='Fällt aus']"
 
-      # Optional: map CSS selector presence to extra Gancio tags
-      tag_selectors:
+      # Optional: apply tags and/or title prefixes when a CSS selector matches
+      # Both "tag" and "title_prefix" are optional; use either or both.
+      status_selectors:
         - selector: "img[alt='Ausverkauft']"
           tag: "ausverkauft"
+          title_prefix: "Ausverkauft: "
         - selector: "img[alt='Verschoben']"
           tag: "verschoben"
+          title_prefix: "Verschoben: "
 
       # Optional: override or supplement iCal field values with HTML selectors
       fields:
@@ -113,11 +116,13 @@ sources:
       event_link_selector: "a[href*='/events/']"
       ical_url_pattern: "{base}/ics/{slug}.ics"
       cancelled_selector: "img[alt='Fällt aus']"
-      tag_selectors:
+      status_selectors:
         - selector: "img[alt='Ausverkauft']"
           tag: "ausverkauft"
+          title_prefix: "Ausverkauft: "
         - selector: "img[alt='Verschoben']"
           tag: "verschoben"
+          title_prefix: "Verschoben: "
       fields:
         description:
           selector: ".event-description"
