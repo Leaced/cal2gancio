@@ -24,6 +24,7 @@ flowchart TD
         TitleFilter["Title filter\ninclude → exclude"] -->
         PastFilter[Remove past events\nif ignore_past_events] -->
         CancelledPost["Cancelled events:\nprefix title or mark for delete"] -->
+        HtmlNorm["Normalise description\n\\n → &lt;br&gt;, strip trailing &lt;br&gt;"] -->
         DescAssembly["Assemble description\nbody + link + disclaimer"] -->
         ContentHash["Compute content hash\n_icalv_"]
     end

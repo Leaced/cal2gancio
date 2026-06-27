@@ -17,6 +17,7 @@ Post-processing (applied to all source types after fetching):
     - Title filter (include / exclude)
     - Past-event filter (ignore_past_events)
     - Cancelled-event title prefix (from text config)
+    - HTML normalisation: plain-text \n → <br>, trailing <br> stripped
     - Description assembly: body + separator + link + disclaimer
     - Content hash (_icalv_)
 """
@@ -87,6 +88,7 @@ def _postprocess(
     events = _apply_filter(events, feed.filter)
     events = _apply_past_filter(events, feed)
     events = _apply_cancelled(events, feed, text)
+    events = _apply_html_normalization(events)
     events = _apply_description(events, event_link_text, disclaimer)
     events = _apply_content_hash(events)
     return events
@@ -135,13 +137,22 @@ def _apply_cancelled(events: list[dict], feed: FeedConfig, text: TextConfig) -> 
     return events
 
 
+def _apply_html_normalization(events: list[dict]) -> list[dict]:
+    """Normalise every event description to HTML before assembly."""
+    for event in events:
+        desc = event.get("description", "")
+        if desc:
+            event["description"] = _to_html(desc)
+    return events
+
+
 def _apply_description(
     events: list[dict],
     event_link_text: str,
     disclaimer: str,
 ) -> list[dict]:
     for event in events:
-        body = _to_html(event.get("description", ""))
+        body = event.get("description", "")   # already normalised by _apply_html_normalization
         url  = event.pop("_event_url", "")
         link = f'<a href="{url}">{event_link_text}</a>' if (url and event_link_text) else ""
         extras = [p for p in [link, disclaimer] if p]
