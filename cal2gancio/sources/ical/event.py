@@ -80,15 +80,13 @@ def build_event(
     feed: FeedConfig,
     disclaimer: str = "",
     event_link_text: str = "Event details",
-    cancelled_prefix: str | None = "Cancelled: ",
 ) -> dict | None:
     """
     Convert a VEVENT to a Gancio event dict.
     Returns None if the component has no DTSTART (unparseable).
 
-    If STATUS:CANCELLED and cancelled_prefix is set, the title is prefixed and
-    _cancelled=True is injected. If cancelled_prefix is None, _cancelled=True is
-    set but the title is left unchanged (caller will delete the event instead).
+    STATUS:CANCELLED sets _cancelled=True; title prefixing and delete decisions
+    are handled by the source dispatcher post-processor, not here.
     """
     dtstart = component.get("DTSTART")
     if not dtstart:
@@ -97,8 +95,6 @@ def build_event(
     start_ts  = to_timestamp(dtstart)
     title     = str(component.get("SUMMARY", "(kein Titel)")).strip()
     cancelled = str(component.get("STATUS", "")).strip().upper() == "CANCELLED"
-    if cancelled and cancelled_prefix is not None:
-        title = cancelled_prefix + title
 
     dtend = component.get("DTEND")
     if dtend is not None:
@@ -132,7 +128,7 @@ def build_event(
         "description":    description,
         "start_datetime": start_ts,
         "multidate":      multidate,
-        **parse_location(component, feed),
+        **parse_location(component),
         **parse_geo(component),
     }
     if user_tags:

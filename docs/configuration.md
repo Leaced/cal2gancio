@@ -73,16 +73,18 @@ Language-specific strings used in event descriptions and titles. All keys are op
 
 | Key                     | Required | Description                                                                               |
 | ----------------------- | -------- | ----------------------------------------------------------------------------------------- |
-| `url`                   | ✓        | iCal feed URL                                                                             |
-| `default_place_name`    | –        | Fallback venue name when the feed has no `LOCATION` field                                 |
-| `default_place_address` | –        | Fallback venue address when the feed has no `LOCATION` field                              |
+| `url`                   | ✓        | Source URL (feed URL or listing page)                                                     |
+| `source_type`           | –        | `ical` (default) or `html` — see [source documentation](sources/)                        |
+| `default_place_name`    | –        | Fallback venue name when the source provides none                                         |
+| `default_place_address` | –        | Fallback venue address when the source provides none                                      |
 | `additional_tags`       | –        | Tags added to every event from this feed                                                  |
 | `disclaimer`            | –        | HTML appended to every event from this feed; overrides the global `disclaimer`            |
-| `event_link_text`       | –        | Link label for the `URL` field of this feed; overrides `text.event_link`                 |
+| `event_link_text`       | –        | Link label for the event URL in the description; overrides `text.event_link`              |
 | `ignore_past_events`    | –        | Skip events whose start time is in the past (default: `true`)                             |
-| `delete_cancelled`      | –        | `true`: delete `STATUS:CANCELLED` events from Gancio; `false`: prefix title (default: `false`) |
+| `delete_cancelled`      | –        | `true`: delete cancelled events from Gancio; `false`: prefix title (default: `false`)    |
 | `filter.include`        | –        | Whitelist: only import events whose title contains one of these strings (case-insensitive)|
 | `filter.exclude`        | –        | Blacklist: skip events whose title contains one of these strings (case-insensitive)       |
+| `html`                  | –        | HTML source options — see [docs/sources/html.md](sources/html.md)                        |
 
 ### Title filter
 

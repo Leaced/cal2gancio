@@ -13,34 +13,44 @@ flowchart TD
 
     subgraph Sources[For each source]
         direction TB
-        Fetch[Fetch iCal feed] --> Parse["Parse VEVENTs\n(skip RECURRENCE-ID)"]
-        Parse --> TitleFilter["Title filter\ninclude → exclude"]
-        TitleFilter --> PastFilter{ignore_past\n_events?}
-        PastFilter -- yes --> RemovePast[Remove past events]
-        PastFilter -- no  --> Events
-        RemovePast --> Events[For each event]
+        Fetch["Fetch & parse events\n(iCal feed / HTML scraper)"]
     end
 
-    Sources --> Cancelled{STATUS:\nCANCELLED?}
+    Sources --> Post
 
-    Cancelled -- "yes +\ndelete_cancelled" --> Lookup1["GET /api/events\n?tags=_ical_…"]
-    Lookup1 --> Found1{Found?}
-    Found1 -- yes --> Del["DELETE /api/event/{id}\n✓ gelöscht"]
-    Found1 -- no  --> NotFound["= nicht gefunden"]
+    subgraph Post[Post-processing]
+        direction TB
+        PlaceDef[Apply default place\nname / address] -->
+        TitleFilter["Title filter\ninclude → exclude"] -->
+        PastFilter[Remove past events\nif ignore_past_events] -->
+        CancelledPost["Cancelled events:\nprefix title or mark for delete"]
+    end
 
-    Cancelled -- "no (or\nprefix title)" --> Lookup2["GET /api/events\n?tags=_ical_…"]
-    Lookup2 --> Found2{Found?}
+    Post --> Sync
 
-    Found2 -- no --> PastAnon{"anonymous\n+ past?"}
-    PastAnon -- yes --> SkipPast["= vergangen"]
-    PastAnon -- no  --> Create["POST /api/event\n✓ erstellt"]
+    subgraph Sync[For each event]
+        direction TB
+        Cancelled{delete_cancelled\n+ _cancelled?}
 
-    Found2 -- yes --> HashMatch{"_icalv_\nmatches?"}
-    HashMatch -- yes --> Skip["= unverändert"]
-    HashMatch -- no  --> IsAnon{anonymous?}
-    IsAnon -- "yes + past" --> SkipPast2["= vergangen"]
-    IsAnon -- yes       --> Dup["POST /api/event\n⚠ Duplikat"]
-    IsAnon -- no        --> Update["PUT /api/event\n✓ aktualisiert"]
+        Cancelled -- yes --> Lookup1["GET /api/events\n?tags=_ical_…"]
+        Lookup1 --> Found1{Found?}
+        Found1 -- yes --> Del["DELETE /api/event/{id}\n✓ gelöscht"]
+        Found1 -- no  --> NotFound["= nicht gefunden"]
+
+        Cancelled -- no --> Lookup2["GET /api/events\n?tags=_ical_…"]
+        Lookup2 --> Found2{Found?}
+
+        Found2 -- no --> PastAnon{"anonymous\n+ past?"}
+        PastAnon -- yes --> SkipPast["= vergangen"]
+        PastAnon -- no  --> Create["POST /api/event\n✓ erstellt"]
+
+        Found2 -- yes --> HashMatch{"_icalv_\nmatches?"}
+        HashMatch -- yes --> Skip["= unverändert"]
+        HashMatch -- no  --> IsAnon{anonymous?}
+        IsAnon -- "yes + past" --> SkipPast2["= vergangen"]
+        IsAnon -- yes       --> Dup["POST /api/event\n⚠ Duplikat"]
+        IsAnon -- no        --> Update["PUT /api/event\n✓ aktualisiert"]
+    end
 ```
 
 ## Stateless sync via internal tags
@@ -49,10 +59,10 @@ cal2gancio keeps no local state file. Instead, every synced event carries two in
 
 | Tag              | Purpose                                                    |
 | ---------------- | ---------------------------------------------------------- |
-| `_ical_{hash}`   | Stable identity key derived from the iCal `UID`            |
+| `_ical_{hash}`   | Stable identity key derived from the event `UID`           |
 | `_icalv_{hash}`  | Content fingerprint; changes when any event field changes  |
 
-On each run, for every iCal event:
+On each run, for every event:
 
 1. Search Gancio for an event with the matching `_ical_` tag
 2. **Not found** → create (POST)
@@ -61,7 +71,7 @@ On each run, for every iCal event:
 
 This works correctly across multiple machines and survives restarts without any local state.
 
-> **Note:** Events without a `UID` field use `title + start_timestamp` as a fallback identity key. If their title or date changes they will be duplicated rather than updated. Well-maintained feeds always export proper UIDs.
+> **Note:** Events without a stable `UID` use the source URL as a fallback identity key (HTML source) or `title + start_timestamp` (iCal without UID). If these change, the event will be duplicated rather than updated.
 
 ## Anonymous mode
 
@@ -79,22 +89,9 @@ The third case creates a duplicate because `PUT /api/event` always requires auth
 
 **Use credentials (`username` + `password_file`) for full create / update / skip support.**
 
-## Supported iCal fields
+## Source types
 
-| iCal field            | Gancio field / behaviour                                          |
-| --------------------- | ----------------------------------------------------------------- |
-| `SUMMARY`             | `title`                                                           |
-| `DESCRIPTION`         | `description`                                                     |
-| `DTSTART`             | `start_datetime`                                                  |
-| `DTEND` > 24 h        | `multidate`                                                       |
-| `DURATION`            | used for `multidate` when `DTEND` is absent                       |
-| `LOCATION`            | `place_name` + `place_address`                                    |
-| `GEO`                 | `place_latitude` / `place_longitude`                              |
-| `CATEGORIES`          | `tags`                                                            |
-| `ATTACH` (image URL)  | `image_url`                                                       |
-| `URL`                 | clickable link in description (label via `text.event_link`)       |
-| `EXDATE`              | excluded recurrence dates (tracked in content hash)               |
-| `STATUS: CANCELLED`   | title-prefix or delete, depending on `delete_cancelled`           |
-| `RRULE` weekly        | `recurrent[frequency]` → `1w` / `2w`                             |
-| `RRULE` monthly       | `recurrent[frequency]` → `1m` / `2m` (no `BYDAY`)                |
-| `RRULE` yearly        | `recurrent[frequency]` → `1y`                                     |
+| Source type | Description | Documentation |
+| ----------- | ----------- | ------------- |
+| `ical`      | Standard iCal/ICS feed URL | [docs/sources/ical.md](sources/ical.md) |
+| `html`      | HTML page scraper with optional per-event iCal | [docs/sources/html.md](sources/html.md) |

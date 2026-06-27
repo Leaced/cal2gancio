@@ -36,8 +36,32 @@ import yaml
 
 class SourceType(Enum):
     ICAL = "ical"
+    HTML = "html"
 
 CONFIG_PATH = Path("/opt/cal2gancio/config.yml")
+
+
+@dataclass
+class FieldSelector:
+    selector: str
+    attribute: str = ""     # extract this HTML attribute; empty → text content
+    as_html: bool = False   # True → extract innerHTML instead of text
+    format: str = ""        # strptime format string for datetime fields
+
+
+@dataclass
+class TagSelector:
+    selector: str
+    tag: str
+
+
+@dataclass
+class HtmlConfig:
+    event_link_selector: str = ""
+    ical_url_pattern: str = ""   # optional; placeholders: {base}, {slug}
+    cancelled_selector: str = ""
+    tag_selectors: list[TagSelector] = field(default_factory=list)
+    fields: dict[str, FieldSelector] = field(default_factory=dict)
 
 
 @dataclass
@@ -64,6 +88,7 @@ class FeedConfig:
     ignore_past_events: bool = True
     delete_cancelled: bool = False
     filter: FilterConfig = field(default_factory=FilterConfig)
+    html: HtmlConfig = field(default_factory=HtmlConfig)
 
 
 @dataclass
@@ -76,6 +101,35 @@ class AppConfig:
     disclaimer: str
     text: TextConfig
     feeds: list[FeedConfig]
+
+
+def _parse_field_selectors(raw: dict) -> dict[str, FieldSelector]:
+    result: dict[str, FieldSelector] = {}
+    for name, cfg in (raw or {}).items():
+        if isinstance(cfg, str):
+            result[name] = FieldSelector(selector=cfg)
+        else:
+            result[name] = FieldSelector(
+                selector=cfg.get("selector", ""),
+                attribute=cfg.get("attribute", ""),
+                as_html=bool(cfg.get("as_html", False)),
+                format=cfg.get("format", ""),
+            )
+    return result
+
+
+def _parse_html_config(raw: dict) -> HtmlConfig:
+    tag_selectors = [
+        TagSelector(selector=item["selector"], tag=item["tag"])
+        for item in (raw.get("tag_selectors") or [])
+    ]
+    return HtmlConfig(
+        event_link_selector=raw.get("event_link_selector", ""),
+        ical_url_pattern=raw.get("ical_url_pattern", ""),
+        cancelled_selector=raw.get("cancelled_selector", ""),
+        tag_selectors=tag_selectors,
+        fields=_parse_field_selectors(raw.get("fields") or {}),
+    )
 
 
 def _parse_filter(raw: dict) -> FilterConfig:
@@ -124,6 +178,7 @@ def load() -> AppConfig:
     feeds = [
         FeedConfig(
             url=entry["url"],
+            source_type=SourceType(entry.get("source_type", "ical").lower()),
             default_place_name=entry.get("default_place_name", ""),
             default_place_address=entry.get("default_place_address", ""),
             additional_tags=entry.get("additional_tags") or [],
@@ -132,6 +187,7 @@ def load() -> AppConfig:
             ignore_past_events=bool(entry.get("ignore_past_events", True)),
             delete_cancelled=bool(entry.get("delete_cancelled", False)),
             filter=_parse_filter(entry.get("filter") or {}),
+            html=_parse_html_config(entry.get("html") or {}),
         )
         for entry in raw["sources"]
         if entry.get("url")

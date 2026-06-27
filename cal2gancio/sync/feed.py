@@ -1,7 +1,5 @@
 """Iterates over all configured feeds and syncs each event."""
 
-import time
-
 from ..config      import AppConfig, FeedConfig, TextConfig
 from ..gancio      import GancioClient, get_token
 from ..sources     import fetch_for_feed
@@ -31,23 +29,11 @@ def sync_feed(
     disclaimer      = feed.disclaimer      if feed.disclaimer      else global_disclaimer
     event_link_text = feed.event_link_text if feed.event_link_text else global_text.event_link
 
-    # cancelled_prefix=None signals build_event to skip title prefixing;
-    # the event will be deleted instead of updated.
-    cancelled_prefix = None if feed.delete_cancelled else global_text.cancelled
-
-    events = fetch_for_feed(feed, disclaimer, event_link_text, cancelled_prefix)
+    events = fetch_for_feed(feed, disclaimer, event_link_text, text=global_text)
 
     if not events:
         print("  (keine Events oder Abruf fehlgeschlagen)")
         return
-
-    if feed.ignore_past_events:
-        now    = time.time()
-        before = len(events)
-        events = [e for e in events if e.get("start_datetime", 0) >= now]
-        skipped = before - len(events)
-        if skipped:
-            print(f"  (vergangene Events übersprungen: {skipped})")
 
     counts: dict[str, int] = {
         "erstellt": 0, "aktualisiert": 0, "unverändert": 0,

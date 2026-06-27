@@ -13,7 +13,6 @@ def fetch_events(
     feed: FeedConfig,
     disclaimer: str = "",
     event_link_text: str = "Event details",
-    cancelled_prefix: str | None = "Cancelled: ",
 ) -> list[dict]:
     """
     Download the iCal feed and return a list of normalized Gancio event dicts.
@@ -41,7 +40,7 @@ def fetch_events(
         # separately when we add cancellation support.
         if component.get("RECURRENCE-ID"):
             continue
-        event = build_event(component, feed, disclaimer, event_link_text, cancelled_prefix)
+        event = build_event(component, feed, disclaimer, event_link_text)
         if event is not None:
             events.append(event)
 
