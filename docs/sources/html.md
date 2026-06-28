@@ -89,6 +89,7 @@ sources:
 | `as_html`   | `false` | Extract `innerHTML` instead of plain text           |
 | `format`    | —       | `strptime` format string for `start_datetime` / `end_datetime` |
 | `regex`     | —       | Regex applied to the extracted value; returns capture group 1 if present, otherwise the full match. Useful for extracting URLs from CSS (`style` attribute) or partial strings. |
+| `time_selector` | — | For `start_datetime` / `end_datetime` only: CSS selector for a separate time-of-day element. Its text is appended (space-separated) to the date text before `format` parsing. |
 
 ## Supported field names
 

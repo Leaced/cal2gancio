@@ -48,6 +48,8 @@ class FieldSelector:
     as_html: bool = False   # True → extract innerHTML instead of text
     format: str = ""        # strptime format string for datetime fields
     regex: str = ""         # regex applied to extracted value; returns group 1 if present, else full match
+    time_selector: str = "" # for datetime fields: CSS selector for a separate time element;
+                             # its text is appended (space-separated) before format parsing
 
 
 @dataclass
@@ -119,6 +121,7 @@ def _parse_field_selectors(raw: dict) -> dict[str, FieldSelector]:
                 as_html=bool(cfg.get("as_html", False)),
                 format=cfg.get("format", ""),
                 regex=cfg.get("regex", ""),
+                time_selector=cfg.get("time_selector", ""),
             )
     return result
 
