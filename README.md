@@ -1,14 +1,15 @@
 # cal2gancio
 
-Synchronizes one or more iCal feeds to a [Gancio](https://gancio.org) instance.
+Synchronizes events from iCal feeds and HTML event pages to a [Gancio](https://gancio.org) instance.
 
 ## Features
 
+- Sources: iCal/ICS feeds and HTML event listing pages
 - Transfers all event data: title, description, location, coordinates, tags, images, recurrence
 - Stateless sync — no local state file; events are tracked via internal Gancio tags (`_ical_…` / `_icalv_…`)
 - Detects unchanged events and skips them; updates events when content changes
 - Per-feed title filters (include / exclude) and past-event filtering
-- `STATUS:CANCELLED` handling: delete from Gancio or prefix title
+- Cancelled event handling: delete from Gancio or prefix title
 - Multi-arch OCI container image (amd64 + arm64)
 
 ## Requirements
@@ -47,8 +48,10 @@ sources:
 | -------- | -------- |
 | [Configuration](docs/configuration.md) | All config keys, filters, disclaimer formatting |
 | [Deployment](docs/deployment.md) | Container, password setup, systemd + Quadlet timer |
-| [How it works](docs/how-it-works.md) | Program flow diagram, stateless sync, anonymous mode, supported iCal fields |
-| [Adding a source type](docs/adding-a-source.md) | How to implement and register a new source (RSS, etc.) |
+| [How it works](docs/how-it-works.md) | Program flow diagram, stateless sync, anonymous mode |
+| [iCal source](docs/sources/ical.md) | Supported iCal fields and notes |
+| [HTML source](docs/sources/html.md) | CSS selector config, field mapping, example |
+| [Adding a source type](docs/adding-a-source.md) | How to implement and register a new source type |
 
 ## Project structure
 
@@ -61,15 +64,20 @@ cal2gancio/
 │   ├── client.py        GancioClient (find / create / update / delete)
 │   └── encoding.py      multipart/form-data encoding
 ├── sources/
-│   ├── __init__.py      Source dispatcher + title filter
-│   └── ical/            iCal source implementation
-│       ├── fetch.py     HTTP fetch + iCal parsing
-│       ├── event.py     VEVENT → Gancio event dict
-│       ├── timestamps.py DTSTART/DTEND/DURATION → Unix timestamp
-│       ├── location.py  LOCATION + GEO parsing
-│       ├── media.py     ATTACH → image URL
-│       ├── recurrence.py RRULE → Gancio recurrence format
-│       └── tags.py      Categories, additional tags, internal sync tags
+│   ├── __init__.py      Source dispatcher + post-processing
+│   ├── ical/            iCal source
+│   │   ├── fetch.py     HTTP fetch + iCal parsing
+│   │   ├── event.py     VEVENT → Gancio event dict
+│   │   ├── timestamps.py DTSTART/DTEND/DURATION → Unix timestamp
+│   │   ├── location.py  LOCATION + GEO parsing
+│   │   ├── media.py     ATTACH → image URL
+│   │   ├── recurrence.py RRULE → Gancio recurrence format
+│   │   └── tags.py      Categories, additional tags, internal sync tags
+│   └── html/            HTML scraper source
+│       ├── fetch.py     Orchestrates discover + extract + enrich
+│       ├── discover.py  Listing page → event URLs
+│       ├── extract.py   CSS selector field extraction
+│       └── ical_fallback.py  Optional per-event iCal fetch
 └── sync/
     ├── decision.py      Per-event create / update / skip / delete logic
     └── feed.py          Feed iteration, summary output

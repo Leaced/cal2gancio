@@ -1,25 +1,87 @@
 """
 Source dispatcher — maps SourceType to a concrete fetch implementation.
 
-Each fetcher must match the signature:
-    (feed: FeedConfig, disclaimer: str, event_link_text: str,
-     cancelled_prefix: str | None) -> list[dict]
+Each fetcher must match the FetchFn signature:
+    (feed: FeedConfig) -> list[dict]
+
+Sources may set event["_event_url"] to provide a link that the post-processor
+will render as a clickable anchor and place after the description body.
 
 To add a new source type:
     1. Add a value to SourceType in config.py
     2. Implement a fetch function with the above signature
     3. Register it in _FETCHERS below
+
+Post-processing (applied to all source types after fetching):
+    - default_place_name / default_place_address fallbacks
+    - additional_tags from config appended to every event
+    - Title filter (include / exclude)
+    - Past-event filter (ignore_past_events)
+    - Cancelled-event title prefix (from text config)
+    - HTML normalisation: plain-text \n → <br>, trailing <br> stripped
+    - Description assembly: body + separator + link + disclaimer
+    - Content hash (_icalv_)
 """
 
+import re
+import time
 from collections.abc import Callable
 
-from ..config import FeedConfig, FilterConfig, SourceType
+from ..config import FeedConfig, FilterConfig, SourceType, TextConfig
 from .ical.fetch import fetch_events as _ical_fetch
+from .html.fetch import fetch_events as _html_fetch
+from .ical.tags import hash_tag, content_hash, is_internal
 
-FetchFn = Callable[[FeedConfig, str, str, "str | None"], list[dict]]
+_SEP  = "—" * 29
+_PARA = "<br><br>"
+
+
+_TRAILING_BR = re.compile(r"(\s*<br\s*/?>)+\s*$", re.IGNORECASE)
+_HTML_TAG    = re.compile(r"<\s*\w")
+_STRIP_NOISE = re.compile(
+    r"<style\b[^>]*>.*?</style>|<script\b[^>]*>.*?</script>|<!--.*?-->",
+    re.IGNORECASE | re.DOTALL,
+)
+_BLOCK_OPEN  = re.compile(
+    r"<(?:p|div|h[1-6]|li|tr|blockquote|ul|ol|table|tbody|thead)\b[^>]*>",
+    re.IGNORECASE,
+)
+_BLOCK_CLOSE = re.compile(
+    r"<br\s*/?>|</(?:p|div|h[1-6]|li|tr|blockquote|ul|ol|table|tbody|thead)>",
+    re.IGNORECASE,
+)
+_MULTI_BR    = re.compile(r"(?:<br\s*/?>[\s]*){2,}", re.IGNORECASE)
+
+
+def _to_html(text: str) -> str:
+    """Normalise a description to HTML for Gancio.
+
+    HTML (contains an opening tag): block-level elements (<div>, <p>, <h*> …)
+    are converted to <br> so Gancio renders line breaks correctly without relying
+    on block-element CSS margins.  Inline elements (<a>, <strong>, <em> …) are
+    kept as-is.  A bare '<' in plain text (e.g. '5 < 10') does NOT trigger HTML
+    mode — only an actual tag does.
+    Plain text: \\n → <br>, 3+ consecutive \\n capped at 2 (= <br><br>).
+    """
+    if not text:
+        return text
+    if _HTML_TAG.search(text):
+        text = _STRIP_NOISE.sub("", text)
+        text = _BLOCK_OPEN.sub("", text)
+        text = _BLOCK_CLOSE.sub("<br>", text)
+        text = _MULTI_BR.sub("<br><br>", text)
+        return _TRAILING_BR.sub("", text).strip()
+    text = text.strip()
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = text.replace("\n\n", "<br><br>")
+    text = text.replace("\n", "<br>")
+    return text
+
+FetchFn = Callable[[FeedConfig], list[dict]]
 
 _FETCHERS: dict[SourceType, FetchFn] = {
     SourceType.ICAL: _ical_fetch,
+    SourceType.HTML: _html_fetch,
 }
 
 
@@ -27,13 +89,54 @@ def fetch_for_feed(
     feed: FeedConfig,
     disclaimer: str = "",
     event_link_text: str = "Event details",
-    cancelled_prefix: str | None = "Cancelled: ",
+    text: TextConfig | None = None,
 ) -> list[dict]:
     fetcher = _FETCHERS.get(feed.source_type)
     if fetcher is None:
         raise ValueError(f"Unsupported source type: {feed.source_type!r}")
-    events = fetcher(feed, disclaimer, event_link_text, cancelled_prefix)
-    return _apply_filter(events, feed.filter)
+    events = fetcher(feed)
+    return _postprocess(events, feed, text or TextConfig(), disclaimer, event_link_text)
+
+
+def _postprocess(
+    events: list[dict],
+    feed: FeedConfig,
+    text: TextConfig,
+    disclaimer: str = "",
+    event_link_text: str = "",
+) -> list[dict]:
+    events = _apply_place_defaults(events, feed)
+    events = _apply_additional_tags(events, feed)
+    events = _apply_filter(events, feed.filter)
+    events = _apply_past_filter(events, feed)
+    events = _apply_cancelled(events, feed, text)
+    events = _apply_html_normalization(events)
+    events = _apply_description(events, event_link_text, disclaimer)
+    events = _apply_content_hash(events)
+    return events
+
+
+def _apply_place_defaults(events: list[dict], feed: FeedConfig) -> list[dict]:
+    if not feed.default_place_name and not feed.default_place_address:
+        return events
+    for event in events:
+        if not event.get("place_name") and feed.default_place_name:
+            event["place_name"] = feed.default_place_name
+        if not event.get("place_address") and feed.default_place_address:
+            event["place_address"] = feed.default_place_address
+    return events
+
+
+def _apply_additional_tags(events: list[dict], feed: FeedConfig) -> list[dict]:
+    if not feed.additional_tags:
+        return events
+    for event in events:
+        existing = event.get("tags") or []
+        existing_lower = {t.lower() for t in existing}
+        new = [t for t in feed.additional_tags if t.lower() not in existing_lower]
+        if new:
+            event["tags"] = existing + new
+    return events
 
 
 def _apply_filter(events: list[dict], f: FilterConfig) -> list[dict]:
@@ -47,4 +150,62 @@ def _apply_filter(events: list[dict], f: FilterConfig) -> list[dict]:
             e for e in events
             if not any(s.lower() in e.get("title", "").lower() for s in f.exclude)
         ]
+    return events
+
+
+def _apply_past_filter(events: list[dict], feed: FeedConfig) -> list[dict]:
+    if not feed.ignore_past_events:
+        return events
+    now = time.time()
+    future = [e for e in events if e.get("start_datetime", 0) >= now]
+    removed = len(events) - len(future)
+    if removed:
+        print(f"  {removed} vergangene Event(s) übersprungen")
+    return future
+
+
+def _apply_cancelled(events: list[dict], feed: FeedConfig, text: TextConfig) -> list[dict]:
+    if feed.delete_cancelled:
+        return events
+    prefix = text.cancelled
+    for event in events:
+        if event.get("_cancelled") and prefix:
+            if not event["title"].startswith(prefix):
+                event["title"] = prefix + event["title"]
+    return events
+
+
+def _apply_html_normalization(events: list[dict]) -> list[dict]:
+    """Normalise every event description to HTML before assembly."""
+    for event in events:
+        desc = event.get("description", "")
+        if desc:
+            event["description"] = _to_html(desc)
+    return events
+
+
+def _apply_description(
+    events: list[dict],
+    event_link_text: str,
+    disclaimer: str,
+) -> list[dict]:
+    for event in events:
+        body = event.get("description", "")   # already normalised by _apply_html_normalization
+        url  = event.pop("_event_url", "")
+        link = f'<a href="{url}">{event_link_text}</a>' if (url and event_link_text) else ""
+        extras = [p for p in [link, disclaimer] if p]
+        if extras:
+            block = _PARA.join(extras)
+            event["description"] = f"{body}{_PARA}{_SEP}{_PARA}{block}" if body else block
+    return events
+
+
+def _apply_content_hash(events: list[dict]) -> list[dict]:
+    for event in events:
+        user_tags = [t for t in (event.get("tags") or []) if not is_internal(t)]
+        uid_tags  = [t for t in (event.get("tags") or []) if t.startswith("_ical_")]
+        event["tags"] = user_tags  # strip any stale hash tag before computing
+        _hash = hash_tag(content_hash(event))
+        event["_hash_tag"] = _hash
+        event["tags"] = user_tags + uid_tags + [_hash]
     return events

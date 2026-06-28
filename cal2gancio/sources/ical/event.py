@@ -5,38 +5,18 @@ The returned dict contains:
   - All Gancio API fields (title, description, start_datetime, …)
   - Internal meta-fields prefixed with "_" (stripped before sending to API):
       _uid_tag      stable lookup tag, e.g. "_ical_abc123def456"
-      _hash_tag     content fingerprint tag, e.g. "_icalv_a1b2c3d4"
       _uid_is_real  False if the UID was generated from title+timestamp
       _exdates      sorted list of excluded recurrence timestamps (for hash only)
+      _hash_tag is NOT set here; it is added later by the post-processor.
 """
 
 from datetime import datetime, timezone
 
-from ...config import FeedConfig
 from .location   import parse_location, parse_geo
 from .media      import parse_image_url
 from .recurrence import parse_recurrent
-from .tags       import parse_categories, uid_tag, hash_tag, content_hash
+from .tags       import parse_categories, uid_tag
 from .timestamps import to_timestamp
-
-_SEP  = "—" * 30
-_PARA = "<br><br>"
-
-
-def _assemble_description(body: str, url: str, event_link_text: str, disclaimer: str) -> str:
-    url_part = f'<a href="{url}">{event_link_text}</a>' if url else ""
-    extras   = [p for p in [url_part, disclaimer] if p]
-
-    if not extras:
-        return body
-
-    extras_block = _PARA.join(extras)
-
-    if body:
-        return f"{body}{_PARA}{_SEP}{_PARA}{extras_block}"
-
-    return extras_block
-
 
 def _end_from_duration(dtstart_prop, duration_prop) -> int | None:
     """Compute end Unix timestamp from DTSTART + DURATION."""
@@ -75,20 +55,16 @@ def _parse_exdates(component) -> list[int]:
     return sorted(set(timestamps))
 
 
-def build_event(
-    component,
-    feed: FeedConfig,
-    disclaimer: str = "",
-    event_link_text: str = "Event details",
-    cancelled_prefix: str | None = "Cancelled: ",
-) -> dict | None:
+def build_event(component) -> dict | None:
     """
     Convert a VEVENT to a Gancio event dict.
     Returns None if the component has no DTSTART (unparseable).
 
-    If STATUS:CANCELLED and cancelled_prefix is set, the title is prefixed and
-    _cancelled=True is injected. If cancelled_prefix is None, _cancelled=True is
-    set but the title is left unchanged (caller will delete the event instead).
+    Sets event["_event_url"] when the VEVENT has a URL field; the post-processor
+    will render it as a clickable link appended after the description body.
+
+    STATUS:CANCELLED sets _cancelled=True; title prefixing and delete decisions
+    are handled by the source dispatcher post-processor, not here.
     """
     dtstart = component.get("DTSTART")
     if not dtstart:
@@ -97,8 +73,6 @@ def build_event(
     start_ts  = to_timestamp(dtstart)
     title     = str(component.get("SUMMARY", "(kein Titel)")).strip()
     cancelled = str(component.get("STATUS", "")).strip().upper() == "CANCELLED"
-    if cancelled and cancelled_prefix is not None:
-        title = cancelled_prefix + title
 
     dtend = component.get("DTEND")
     if dtend is not None:
@@ -119,20 +93,19 @@ def build_event(
         if recurrent.get("days"):
             rec_fields["recurrent[days]"] = recurrent["days"]
 
-    user_tags = parse_categories(component, feed)
+    user_tags = parse_categories(component)
     image_url = parse_image_url(component)
     exdates   = _parse_exdates(component)
 
     url         = str(component.get("URL", "")).strip()
     description = str(component.get("DESCRIPTION", "")).strip()
-    description = _assemble_description(description, url, event_link_text, disclaimer)
 
     event: dict = {
         "title":          title,
         "description":    description,
         "start_datetime": start_ts,
         "multidate":      multidate,
-        **parse_location(component, feed),
+        **parse_location(component),
         **parse_geo(component),
     }
     if user_tags:
@@ -143,21 +116,19 @@ def build_event(
         event["_exdates"] = exdates
     if cancelled:
         event["_cancelled"] = True
+    if url:
+        event["_event_url"] = url
     event.update(rec_fields)
 
-    # Derive identity and content fingerprint
+    # Derive stable identity (content hash is computed later, after post-processing)
     raw_uid     = str(component.get("UID", "")).strip()
     uid_is_real = bool(raw_uid)
     uid         = raw_uid if uid_is_real else f"noid::{title}::{start_ts}"
 
-    _uid_tag  = uid_tag(uid)
-    _hash_tag = hash_tag(content_hash(event))
+    _uid_tag = uid_tag(uid)
 
-    # Inject internal tags into the tag list (sent to Gancio, used for lookup)
-    event["tags"] = (event.get("tags") or []) + [_uid_tag, _hash_tag]
-
+    event["tags"]         = (event.get("tags") or []) + [_uid_tag]
     event["_uid_tag"]     = _uid_tag
-    event["_hash_tag"]    = _hash_tag
     event["_uid_is_real"] = uid_is_real
 
     return event
