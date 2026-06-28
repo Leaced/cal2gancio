@@ -14,6 +14,7 @@ To add a new source type:
 
 Post-processing (applied to all source types after fetching):
     - default_place_name / default_place_address fallbacks
+    - additional_tags from config appended to every event
     - Title filter (include / exclude)
     - Past-event filter (ignore_past_events)
     - Cancelled-event title prefix (from text config)
@@ -22,6 +23,7 @@ Post-processing (applied to all source types after fetching):
     - Content hash (_icalv_)
 """
 
+import re
 import time
 from collections.abc import Callable
 
@@ -29,8 +31,6 @@ from ..config import FeedConfig, FilterConfig, SourceType, TextConfig
 from .ical.fetch import fetch_events as _ical_fetch
 from .html.fetch import fetch_events as _html_fetch
 from .ical.tags import hash_tag, content_hash, is_internal
-
-import re
 
 _SEP  = "—" * 29
 _PARA = "<br><br>"
@@ -116,7 +116,8 @@ def _apply_additional_tags(events: list[dict], feed: FeedConfig) -> list[dict]:
         return events
     for event in events:
         existing = event.get("tags") or []
-        new = [t for t in feed.additional_tags if t not in existing]
+        existing_lower = {t.lower() for t in existing}
+        new = [t for t in feed.additional_tags if t.lower() not in existing_lower]
         if new:
             event["tags"] = existing + new
     return events
@@ -140,7 +141,11 @@ def _apply_past_filter(events: list[dict], feed: FeedConfig) -> list[dict]:
     if not feed.ignore_past_events:
         return events
     now = time.time()
-    return [e for e in events if e.get("start_datetime", 0) >= now]
+    future = [e for e in events if e.get("start_datetime", 0) >= now]
+    removed = len(events) - len(future)
+    if removed:
+        print(f"  {removed} vergangene Event(s) übersprungen")
+    return future
 
 
 def _apply_cancelled(events: list[dict], feed: FeedConfig, text: TextConfig) -> list[dict]:

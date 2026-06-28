@@ -32,7 +32,7 @@ def sync_feed(
     events = fetch_for_feed(feed, disclaimer, event_link_text, text=global_text)
 
     if not events:
-        print("  (keine Events oder Abruf fehlgeschlagen)")
+        print("  (keine Events nach Filtern)")
         return
 
     counts: dict[str, int] = {

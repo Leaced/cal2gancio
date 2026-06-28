@@ -3,7 +3,7 @@
 import re
 from datetime import datetime, timezone
 from html import unescape
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup, Tag
@@ -92,5 +92,4 @@ def parse_datetime(text: str, fmt: str) -> int | None:
 
 
 def slug_from_url(url: str) -> str:
-    from urllib.parse import urlparse
     return urlparse(url).path.rstrip("/").split("/")[-1]
