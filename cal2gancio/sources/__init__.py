@@ -37,23 +37,39 @@ _PARA = "<br><br>"
 
 
 _TRAILING_BR = re.compile(r"(\s*<br\s*/?>)+\s*$", re.IGNORECASE)
-
-
-_HTML_TAG = re.compile(r"<\s*\w")
+_HTML_TAG    = re.compile(r"<\s*\w")
+_STRIP_NOISE = re.compile(
+    r"<style\b[^>]*>.*?</style>|<script\b[^>]*>.*?</script>|<!--.*?-->",
+    re.IGNORECASE | re.DOTALL,
+)
+_BLOCK_OPEN  = re.compile(
+    r"<(?:p|div|h[1-6]|li|tr|blockquote|ul|ol|table|tbody|thead)\b[^>]*>",
+    re.IGNORECASE,
+)
+_BLOCK_CLOSE = re.compile(
+    r"<br\s*/?>|</(?:p|div|h[1-6]|li|tr|blockquote|ul|ol|table|tbody|thead)>",
+    re.IGNORECASE,
+)
+_MULTI_BR    = re.compile(r"(?:<br\s*/?>[\s]*){2,}", re.IGNORECASE)
 
 
 def _to_html(text: str) -> str:
     """Normalise a description to HTML for Gancio.
 
-    HTML (contains an opening tag like '<strong' or '<br'): returned as-is,
-    trailing <br> stripped.  A bare '<' in plain text (e.g. '5 < 10') does
-    NOT trigger HTML mode — only an actual tag does.
-    Plain text: \n → <br>, 3+ consecutive \n capped at 2 (= <br><br>).
-    No <p> tags — avoids CSS margin adding unexpected spacing.
+    HTML (contains an opening tag): block-level elements (<div>, <p>, <h*> …)
+    are converted to <br> so Gancio renders line breaks correctly without relying
+    on block-element CSS margins.  Inline elements (<a>, <strong>, <em> …) are
+    kept as-is.  A bare '<' in plain text (e.g. '5 < 10') does NOT trigger HTML
+    mode — only an actual tag does.
+    Plain text: \\n → <br>, 3+ consecutive \\n capped at 2 (= <br><br>).
     """
     if not text:
         return text
     if _HTML_TAG.search(text):
+        text = _STRIP_NOISE.sub("", text)
+        text = _BLOCK_OPEN.sub("", text)
+        text = _BLOCK_CLOSE.sub("<br>", text)
+        text = _MULTI_BR.sub("<br><br>", text)
         return _TRAILING_BR.sub("", text).strip()
     text = text.strip()
     text = re.sub(r"\n{3,}", "\n\n", text)

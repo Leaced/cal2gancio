@@ -5,9 +5,9 @@ The returned dict contains:
   - All Gancio API fields (title, description, start_datetime, …)
   - Internal meta-fields prefixed with "_" (stripped before sending to API):
       _uid_tag      stable lookup tag, e.g. "_ical_abc123def456"
-      _hash_tag     content fingerprint tag, e.g. "_icalv_a1b2c3d4"
       _uid_is_real  False if the UID was generated from title+timestamp
       _exdates      sorted list of excluded recurrence timestamps (for hash only)
+      _hash_tag is NOT set here; it is added later by the post-processor.
 """
 
 from datetime import datetime, timezone

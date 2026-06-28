@@ -11,7 +11,7 @@ When both iCal and HTML selectors provide a value for the same field, the
 1. Fetch the listing page (`url`) and find all event links via `event_link_selector`
 2. For each event URL: optionally fetch a per-event iCal file (`ical_url_pattern`)
 3. Fetch the event detail page and apply `fields` selectors (override iCal values)
-4. Apply `cancelled_selector` and `tag_selectors` for status and extra tags
+4. Apply `cancelled_selector` and `status_selectors` for status and extra tags
 
 ## Config reference
 
