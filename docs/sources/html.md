@@ -88,6 +88,7 @@ sources:
 | `attribute` | —       | Extract this HTML attribute; omit to use text content |
 | `as_html`   | `false` | Extract `innerHTML` instead of plain text           |
 | `format`    | —       | `strptime` format string for `start_datetime` / `end_datetime` |
+| `regex`     | —       | Regex applied to the extracted value; returns capture group 1 if present, otherwise the full match. Useful for extracting URLs from CSS (`style` attribute) or partial strings. |
 
 ## Supported field names
 

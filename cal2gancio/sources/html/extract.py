@@ -32,12 +32,15 @@ def extract_field(soup: BeautifulSoup, fs: FieldSelector, page_url: str = "") ->
         if value and page_url and value.startswith("/"):
             from urllib.parse import urljoin
             value = urljoin(page_url, value)
-        return value
-    if fs.as_html:
-        return el.decode_contents().strip()
-    # Insert newlines only at block boundaries, not around inline tags
-    raw = _BLOCK_TAGS.sub("\n", str(el))
-    return BeautifulSoup(raw, "html.parser").get_text(separator="", strip=True).strip()
+    elif fs.as_html:
+        value = el.decode_contents().strip()
+    else:
+        raw = _BLOCK_TAGS.sub("\n", str(el))
+        value = BeautifulSoup(raw, "html.parser").get_text(separator="", strip=True).strip()
+    if fs.regex and value:
+        m = re.search(fs.regex, value)
+        value = (m.group(1) if m and m.lastindex else m.group(0) if m else "")
+    return value
 
 
 def parse_datetime(text: str, fmt: str) -> int | None:
