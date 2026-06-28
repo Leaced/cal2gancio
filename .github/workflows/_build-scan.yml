@@ -74,6 +74,9 @@ jobs:
         run: |
           cosign sign --yes \
             "ghcr.io/${GITHUB_REPOSITORY,,}@${{ steps.push.outputs.digest }}"
+        env:
+          COSIGN_REGISTRY_USERNAME: ${{ github.actor }}
+          COSIGN_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Trivy vulnerability scan (SARIF)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
