@@ -36,7 +36,7 @@ def fetch_events(feed: FeedConfig) -> list[dict]:
         # separately when we add cancellation support.
         if component.get("RECURRENCE-ID"):
             continue
-        event = build_event(component, feed)
+        event = build_event(component)
         if event is not None:
             events.append(event)
 

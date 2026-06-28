@@ -63,7 +63,7 @@ def fetch_events(feed: FeedConfig) -> list[dict]:
             ical_url = cfg.ical_url_pattern.format(
                 base=base_url, slug=slug, event_id=event_id or slug
             )
-            ical_event = fetch_ical_event(ical_url, feed)
+            ical_event = fetch_ical_event(ical_url)
             if ical_event:
                 event = ical_event
                 ical_uid_tag = ical_event.get("_uid_tag")
@@ -109,8 +109,9 @@ def fetch_events(feed: FeedConfig) -> list[dict]:
                 event["tags"] = existing + extra_tags
 
         # --- 6. Guard: require title and start_datetime -----------------------
-        if not event.get("title") or not event.get("start_datetime"):
-            print(f"  html: Überspringe {event_url} — Titel oder Startzeit fehlt", file=sys.stderr)
+        missing = [f for f, k in [("Titel", "title"), ("Startzeit", "start_datetime")] if not event.get(k)]
+        if missing:
+            print(f"  html: Überspringe {event_url} — {', '.join(missing)} fehlt", file=sys.stderr)
             continue
 
         # --- 7. Event URL for post-processor description assembly -------------

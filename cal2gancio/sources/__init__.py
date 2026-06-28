@@ -39,16 +39,21 @@ _PARA = "<br><br>"
 _TRAILING_BR = re.compile(r"(\s*<br\s*/?>)+\s*$", re.IGNORECASE)
 
 
+_HTML_TAG = re.compile(r"<\s*\w")
+
+
 def _to_html(text: str) -> str:
     """Normalise a description to HTML for Gancio.
 
-    HTML (contains '<'): returned as-is, trailing <br> stripped.
+    HTML (contains an opening tag like '<strong' or '<br'): returned as-is,
+    trailing <br> stripped.  A bare '<' in plain text (e.g. '5 < 10') does
+    NOT trigger HTML mode — only an actual tag does.
     Plain text: \n → <br>, 3+ consecutive \n capped at 2 (= <br><br>).
     No <p> tags — avoids CSS margin adding unexpected spacing.
     """
     if not text:
         return text
-    if "<" in text:
+    if _HTML_TAG.search(text):
         return _TRAILING_BR.sub("", text).strip()
     text = text.strip()
     text = re.sub(r"\n{3,}", "\n\n", text)
@@ -85,6 +90,7 @@ def _postprocess(
     event_link_text: str = "",
 ) -> list[dict]:
     events = _apply_place_defaults(events, feed)
+    events = _apply_additional_tags(events, feed)
     events = _apply_filter(events, feed.filter)
     events = _apply_past_filter(events, feed)
     events = _apply_cancelled(events, feed, text)
@@ -102,6 +108,17 @@ def _apply_place_defaults(events: list[dict], feed: FeedConfig) -> list[dict]:
             event["place_name"] = feed.default_place_name
         if not event.get("place_address") and feed.default_place_address:
             event["place_address"] = feed.default_place_address
+    return events
+
+
+def _apply_additional_tags(events: list[dict], feed: FeedConfig) -> list[dict]:
+    if not feed.additional_tags:
+        return events
+    for event in events:
+        existing = event.get("tags") or []
+        new = [t for t in feed.additional_tags if t not in existing]
+        if new:
+            event["tags"] = existing + new
     return events
 
 

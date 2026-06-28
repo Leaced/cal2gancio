@@ -3,9 +3,10 @@
 import re
 from datetime import datetime, timezone
 from html import unescape
+from urllib.parse import urljoin
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 from ...config import FieldSelector
 
@@ -29,39 +30,52 @@ _STRIP_BLOCKS = re.compile(
 _ALL_TAGS = re.compile(r"<[^>]+>")
 
 
+def _html_to_text(el: Tag) -> str:
+    """Convert a BS4 element to plain text, preserving block structure.
+
+    Strategy:
+    - Block-closing tags (</p>, </div>, <br>, …) → \\n so paragraphs survive.
+    - <style>, <script>, and HTML comments (incl. Office XML conditional comments)
+      are removed entirely before tag stripping so their content never leaks.
+    - Remaining tags are stripped with regex rather than get_text(strip=True);
+      this keeps the surrounding whitespace of inline elements like <strong>.
+    - HTML entities are decoded, then each line's internal whitespace is collapsed.
+    - 3+ consecutive blank lines are reduced to 2 (paragraph cap).
+    """
+    raw = _BLOCK_TAGS.sub("\n", str(el))
+    raw = _STRIP_BLOCKS.sub("", raw)
+    raw = unescape(_ALL_TAGS.sub("", raw))
+    lines = [" ".join(line.split()) for line in raw.split("\n")]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+
+
 def extract_field(soup: BeautifulSoup, fs: FieldSelector, page_url: str = "") -> str:
     el = soup.select_one(fs.selector)
     if el is None:
         return ""
+
     if fs.attribute:
         value = el.get(fs.attribute, "").strip()
         if value and page_url and value.startswith("/"):
-            from urllib.parse import urljoin
             value = urljoin(page_url, value)
     elif fs.as_html:
         value = el.decode_contents().strip()
+    elif fs.flat_text:
+        value = el.get_text(strip=True)
     else:
-        # 1. Replace block-level tags with \n to preserve paragraph/line structure.
-        # 2. Remove <style>, <script>, and HTML comments (incl. Office XML in
-        #    <!--[if gte mso 9]>...<![endif]-->) before stripping remaining tags,
-        #    so their text content doesn't leak into the output.
-        # 3. Strip remaining tags with regex — unlike get_text(strip=True) this preserves
-        #    surrounding whitespace, so inline elements like <strong> keep their spaces.
-        # 4. Decode HTML entities, then normalise whitespace within each line.
-        raw = _BLOCK_TAGS.sub("\n", str(el))
-        raw = _STRIP_BLOCKS.sub("", raw)
-        raw = unescape(_ALL_TAGS.sub("", raw))
-        lines = [" ".join(line.split()) for line in raw.split("\n")]
-        value = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+        value = _html_to_text(el)
+
     if fs.regex and value:
         m = re.search(fs.regex, value)
         value = (m.group(1) if m and m.lastindex else m.group(0) if m else "")
+
     if fs.time_selector and value:
         time_el = soup.select_one(fs.time_selector)
         if time_el:
             time_text = time_el.get_text(strip=True)
             if time_text:
                 value = f"{value} {time_text}"
+
     return value
 
 

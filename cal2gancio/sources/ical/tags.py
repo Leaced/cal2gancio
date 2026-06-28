@@ -1,7 +1,9 @@
 """
 Handles two kinds of tags:
 
-User tags   – iCal CATEGORIES + additional_tags from config (visible in Gancio)
+User tags   – iCal CATEGORIES (visible in Gancio).
+              additional_tags from config are applied later by the post-processor
+              so that all source types benefit from the same logic.
 Internal tags – two tags injected into every synced event for stateless tracking:
 
     _ical_{uid_hash12}    stable lookup key derived from the iCal UID
@@ -13,8 +15,6 @@ without keeping any local state file.
 
 import hashlib
 import json
-
-from ...config import FeedConfig
 
 UID_PREFIX  = "_ical_"
 HASH_PREFIX = "_icalv_"
@@ -60,26 +60,21 @@ def content_hash(event: dict) -> str:
 # User tag parsing
 # ---------------------------------------------------------------------------
 
-def parse_categories(component, feed: FeedConfig) -> list[str]:
-    """
-    Merge iCal CATEGORIES with additional_tags from the feed config.
-    Deduplicates case-insensitively; preserves order.
-    """
+def parse_categories(component) -> list[str]:
+    """Return iCal CATEGORIES as a list of strings. Deduplicates case-insensitively."""
     cats = component.get("CATEGORIES")
-    tags: list[str] = []
-
-    if cats:
-        if hasattr(cats, "cats"):
-            tags = [str(c) for c in cats.cats]
-        elif isinstance(cats, list):
-            tags = [str(c) for c in cats]
-        else:
-            tags = [str(cats)]
-
-    seen = {t.lower() for t in tags}
-    for t in feed.additional_tags:
+    if not cats:
+        return []
+    if hasattr(cats, "cats"):
+        tags = [str(c) for c in cats.cats]
+    elif isinstance(cats, list):
+        tags = [str(c) for c in cats]
+    else:
+        tags = [str(cats)]
+    seen: set[str] = set()
+    result: list[str] = []
+    for t in tags:
         if t.lower() not in seen:
-            tags.append(t)
+            result.append(t)
             seen.add(t.lower())
-
-    return tags
+    return result

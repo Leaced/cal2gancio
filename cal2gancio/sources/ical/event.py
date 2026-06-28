@@ -12,7 +12,6 @@ The returned dict contains:
 
 from datetime import datetime, timezone
 
-from ...config import FeedConfig
 from .location   import parse_location, parse_geo
 from .media      import parse_image_url
 from .recurrence import parse_recurrent
@@ -56,10 +55,7 @@ def _parse_exdates(component) -> list[int]:
     return sorted(set(timestamps))
 
 
-def build_event(
-    component,
-    feed: FeedConfig,
-) -> dict | None:
+def build_event(component) -> dict | None:
     """
     Convert a VEVENT to a Gancio event dict.
     Returns None if the component has no DTSTART (unparseable).
@@ -97,7 +93,7 @@ def build_event(
         if recurrent.get("days"):
             rec_fields["recurrent[days]"] = recurrent["days"]
 
-    user_tags = parse_categories(component, feed)
+    user_tags = parse_categories(component)
     image_url = parse_image_url(component)
     exdates   = _parse_exdates(component)
 

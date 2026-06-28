@@ -86,10 +86,11 @@ sources:
 | ----------- | ------- | --------------------------------------------------- |
 | `selector`  | —       | CSS selector (required)                             |
 | `attribute` | —       | Extract this HTML attribute; omit to use text content |
-| `as_html`   | `false` | Extract `innerHTML` instead of plain text           |
+| `as_html`   | `false` | Extract `innerHTML` as a raw HTML string. Mutually exclusive with `attribute` and `flat_text`. |
+| `flat_text` | `false` | Concatenate all text nodes without any separator (`get_text(strip=True)`). Use when the CMS splits a single value across many inline/block elements (e.g. individual digits in separate `<h1>` tags). Mutually exclusive with `attribute` and `as_html`. |
 | `format`    | —       | `strptime` format string for `start_datetime` / `end_datetime` |
 | `regex`     | —       | Regex applied to the extracted value; returns capture group 1 if present, otherwise the full match. Useful for extracting URLs from CSS (`style` attribute) or partial strings. |
-| `time_selector` | — | For `start_datetime` / `end_datetime` only: CSS selector for a separate time-of-day element. Its text is appended (space-separated) to the date text before `format` parsing. |
+| `time_selector` | — | For `start_datetime` / `end_datetime` only: CSS selector for a separate time-of-day element. Its text is appended (space-separated) to the date text before `format` parsing. Requires plain-text or `flat_text` mode (not `as_html` / `attribute`). |
 
 ## Supported field names
 
