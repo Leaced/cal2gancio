@@ -10,7 +10,6 @@ Synchronizes events from iCal feeds and HTML event pages to a [Gancio](https://g
 - Detects unchanged events and skips them; updates events when content changes
 - Per-feed title filters (include / exclude) and past-event filtering
 - Cancelled event handling: delete from Gancio or prefix title
-- Multi-arch OCI container image (amd64 + arm64)
 
 ## Requirements
 
