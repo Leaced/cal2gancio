@@ -81,9 +81,17 @@ def fetch_events(feed: FeedConfig) -> list[dict]:
         if soup is not None:
             for field_name, fs in cfg.fields.items():
                 if field_name in _DATETIME_FIELDS:
-                    ts = parse_datetime(extract_field(soup, fs, event_url), fs.format)
+                    raw = extract_field(soup, fs, event_url)
+                    ts = parse_datetime(raw, fs.format)
                     if ts is not None:
                         event[field_name] = ts
+                    elif raw and fs.format:
+                        fmt_hint = fs.format if isinstance(fs.format, str) else " | ".join(fs.format)
+                        print(
+                            f"  html: {field_name}: Datum konnte nicht geparst werden "
+                            f"(Text: {raw!r}, Format: {fmt_hint!r})",
+                            file=sys.stderr,
+                        )
                 else:
                     val = extract_field(soup, fs, event_url)
                     if val:

@@ -60,13 +60,14 @@ class FieldSelector:
                       that use plain-text or flat_text mode (not as_html / attribute)
     """
     selector: str
-    attribute: str = ""     # HTML attribute to read; mutually exclusive with as_html / flat_text
-    as_html: bool = False   # extract innerHTML; mutually exclusive with attribute / flat_text
-    flat_text: bool = False # concatenate all text nodes as-is; mutually exclusive with as_html / attribute
-    format: str = ""        # strptime format for start_datetime / end_datetime
-    regex: str = ""         # applied after extraction; group 1 returned if present, else full match
-    time_selector: str = "" # datetime fields only: CSS selector for a separate time element;
-                             # its text is appended (space-separated) before format parsing
+    attribute: str = ""       # HTML attribute to read; mutually exclusive with as_html / flat_text
+    as_html: bool = False     # extract innerHTML; mutually exclusive with attribute / flat_text
+    flat_text: bool = False   # concatenate all text nodes as-is; mutually exclusive with as_html / attribute
+    format: list[str] = field(default_factory=list)  # strptime format(s) for start/end_datetime;
+                              # list → tried in order, first match wins (useful for optional time component)
+    regex: str = ""           # applied after extraction; group 1 returned if present, else full match
+    time_selector: str = ""   # datetime fields only: CSS selector for a separate time element;
+                               # its text is appended (space-separated) before format parsing
 
     def __post_init__(self) -> None:
         modes = [m for m, v in [("attribute", self.attribute), ("as_html", self.as_html), ("flat_text", self.flat_text)] if v]
@@ -146,12 +147,19 @@ def _parse_field_selectors(raw: dict) -> dict[str, FieldSelector]:
         if isinstance(cfg, str):
             result[name] = FieldSelector(selector=cfg)
         else:
+            raw_fmt = cfg.get("format", "")
+            if isinstance(raw_fmt, list):
+                fmt_list = [str(f) for f in raw_fmt if f]
+            elif raw_fmt:
+                fmt_list = [str(raw_fmt)]
+            else:
+                fmt_list = []
             result[name] = FieldSelector(
                 selector=cfg.get("selector", ""),
                 attribute=cfg.get("attribute", ""),
                 as_html=bool(cfg.get("as_html", False)),
                 flat_text=bool(cfg.get("flat_text", False)),
-                format=cfg.get("format", ""),
+                format=fmt_list,
                 regex=cfg.get("regex", ""),
                 time_selector=cfg.get("time_selector", ""),
             )
