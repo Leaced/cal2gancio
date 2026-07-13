@@ -68,6 +68,8 @@ class FieldSelector:
     regex: str = ""           # applied after extraction; group 1 returned if present, else full match
     time_selector: str = ""   # datetime fields only: CSS selector for a separate time element;
                                # its text is appended (space-separated) before format parsing
+    multi_match: bool = False # start_datetime only: select all matching elements and produce one
+                               # event per parsed datetime instead of only the first match
 
     def __post_init__(self) -> None:
         modes = [m for m, v in [("attribute", self.attribute), ("as_html", self.as_html), ("flat_text", self.flat_text)] if v]
@@ -166,6 +168,7 @@ def _parse_field_selectors(raw: dict) -> dict[str, FieldSelector]:
                 format=fmt_list,
                 regex=cfg.get("regex", ""),
                 time_selector=cfg.get("time_selector", ""),
+                multi_match=bool(cfg.get("multi_match", False)),
             )
     return result
 

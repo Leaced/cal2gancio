@@ -121,6 +121,7 @@ when both are present.
 | `regex` | Regex applied to the extracted value; returns capture group 1 if present, otherwise the full match. |
 | `time_selector` | For `start_datetime` / `end_datetime` only: CSS selector for a separate time element. Its text is appended (space-separated) before `format` parsing. Requires plain-text or `flat_text` mode. |
 | `format` | `strptime` format string, or a YAML list tried in order (first match wins — useful when a time component is optional). German and English month names (full and abbreviated, e.g. `Juli`, `July`, `Jul`) are normalised to zero-padded numbers automatically. |
+| `multi_match` | `start_datetime` only. `true` → select **all** elements matching `selector` instead of just the first, and produce one event per parsed datetime. Useful for venues that list all performance dates on a single detail page. Each date gets a distinct stable identity derived from the event URL and its timestamp. |
 
 ## UID and identity
 

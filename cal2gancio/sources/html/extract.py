@@ -50,11 +50,8 @@ def _html_to_text(el: Tag) -> str:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
 
 
-def extract_field(soup: BeautifulSoup, fs: FieldSelector, page_url: str = "") -> str:
-    el = soup.select_one(fs.selector)
-    if el is None:
-        return ""
-
+def _extract_value(el: Tag, fs: FieldSelector, page_url: str = "") -> str:
+    """Extract a value from a single already-selected element."""
     if fs.attribute:
         value = el.get(fs.attribute, "").strip()
         if value and page_url and value.startswith("/"):
@@ -70,6 +67,16 @@ def extract_field(soup: BeautifulSoup, fs: FieldSelector, page_url: str = "") ->
         m = re.search(fs.regex, value)
         value = (m.group(1) if m and m.lastindex else m.group(0) if m else "")
 
+    return value
+
+
+def extract_field(soup: BeautifulSoup, fs: FieldSelector, page_url: str = "") -> str:
+    el = soup.select_one(fs.selector)
+    if el is None:
+        return ""
+
+    value = _extract_value(el, fs, page_url)
+
     if fs.time_selector and value:
         time_el = soup.select_one(fs.time_selector)
         if time_el:
@@ -78,6 +85,11 @@ def extract_field(soup: BeautifulSoup, fs: FieldSelector, page_url: str = "") ->
                 value = f"{value} {time_text}"
 
     return value
+
+
+def extract_all_fields(soup: BeautifulSoup, fs: FieldSelector, page_url: str = "") -> list[str]:
+    """Extract a value from every element matching fs.selector (for multi_match)."""
+    return [_extract_value(el, fs, page_url) for el in soup.select(fs.selector)]
 
 
 def parse_datetime(text: str, fmt: str | list[str]) -> int | None:
