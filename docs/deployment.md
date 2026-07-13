@@ -42,6 +42,18 @@ chmod 600 /etc/cal2gancio/password
 
 Set `password_file: /run/secrets/gancio_password` in `config.yml` and mount the file at the same path.
 
+## Dry run
+
+To verify your config and inspect the events that would be sent — without touching Gancio — pass `--dry-run`:
+
+```bash
+podman run --rm \
+  -v /opt/cal2gancio:/opt/cal2gancio:ro,Z \
+  ghcr.io/leaced/cal2gancio:latest --dry-run
+```
+
+No password file or Gancio credentials are required. Each event is printed as JSON after the full post-processing pipeline (filters, tags, description assembly, etc.).
+
 ## Quick run
 
 With a podman secret:

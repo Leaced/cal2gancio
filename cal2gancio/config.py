@@ -140,6 +140,7 @@ class AppConfig:
     disclaimer: str
     text: TextConfig
     feeds: list[FeedConfig]
+    dry_run: bool = False
 
 
 def _parse_field_selectors(raw: dict) -> dict[str, FieldSelector]:
@@ -216,7 +217,7 @@ def _parse_filter(raw: dict) -> FilterConfig:
     )
 
 
-def load() -> AppConfig:
+def load(dry_run: bool = False) -> AppConfig:
     if not CONFIG_PATH.exists():
         print(f"Error: config not found at {CONFIG_PATH}", file=sys.stderr)
         sys.exit(1)
@@ -234,9 +235,11 @@ def load() -> AppConfig:
         print("Error: missing sources", file=sys.stderr)
         sys.exit(1)
 
+    _dry_run = dry_run or bool(gancio.get("dry_run", False))
+
     username = gancio.get("username") or ""
     password = ""
-    if username:
+    if username and not _dry_run:
         try:
             password = Path(gancio.get("password_file", "/run/secrets/gancio_password")).read_text().strip()
         except OSError as e:
@@ -279,4 +282,5 @@ def load() -> AppConfig:
         disclaimer=raw.get("disclaimer", ""),
         text=text,
         feeds=feeds,
+        dry_run=_dry_run,
     )
