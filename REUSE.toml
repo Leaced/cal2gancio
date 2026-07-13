@@ -12,6 +12,7 @@ path = [
     "Containerfile",
     ".containerignore",
     "requirements.txt",
+    "ROADMAP.md",
     "renovate.json",
     ".releaserc.json",
     ".github/**",
