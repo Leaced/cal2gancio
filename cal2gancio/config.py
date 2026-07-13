@@ -87,18 +87,20 @@ class StatusSelector:
     selector: str
     tag: str = ""           # Gancio tag added when selector matches
     title_prefix: str = ""  # prepended to event title when selector matches
+    cancelled: bool = False # marks event as cancelled when selector matches
 
 
 @dataclass
 class HtmlConfig:
+    # listing page
     event_link_selector: str = ""
-    event_id_attribute: str = ""   # HTML attribute on the link element to use as {event_id} in ical_url_pattern
-    ical_url_pattern: str = ""     # optional; placeholders: {base}, {slug}, {event_id}
-    ical_link_selector: str = ""   # CSS selector for an <a> on the detail page whose href IS the iCal URL
-    cancelled_selector: str = ""
+    event_id_attribute: str = ""
+    max_events: int = 0
+    # detail page
+    ical_url_pattern: str = ""
+    ical_link_selector: str = ""
     status_selectors: list[StatusSelector] = field(default_factory=list)
     fields: dict[str, FieldSelector] = field(default_factory=dict)
-    max_events: int = 0            # 0 = unlimited
 
 
 @dataclass
@@ -168,23 +170,42 @@ def _parse_field_selectors(raw: dict) -> dict[str, FieldSelector]:
 
 
 def _parse_html_config(raw: dict) -> HtmlConfig:
+    is_nested = "listing_page" in raw or "detail_page" in raw
+    if is_nested:
+        listing = raw.get("listing_page") or {}
+        detail  = raw.get("detail_page")  or {}
+    else:
+        print(
+            "  Warning: flat html.* config is deprecated — "
+            "migrate to html.listing_page / html.detail_page.",
+            file=sys.stderr,
+        )
+        listing = detail = raw
+
     status_selectors = [
         StatusSelector(
             selector=item["selector"],
             tag=item.get("tag", ""),
             title_prefix=item.get("title_prefix", ""),
+            cancelled=bool(item.get("cancelled", False)),
         )
-        for item in (raw.get("status_selectors") or [])
+        for item in (detail.get("status_selectors") or [])
     ]
+    # Flat-form compat: cancelled_selector → StatusSelector(cancelled=True)
+    if not is_nested and raw.get("cancelled_selector"):
+        status_selectors.insert(0, StatusSelector(
+            selector=raw["cancelled_selector"],
+            cancelled=True,
+        ))
+
     return HtmlConfig(
-        event_link_selector=raw.get("event_link_selector", ""),
-        event_id_attribute=raw.get("event_id_attribute", ""),
-        ical_url_pattern=raw.get("ical_url_pattern", ""),
-        ical_link_selector=raw.get("ical_link_selector", ""),
-        cancelled_selector=raw.get("cancelled_selector", ""),
+        event_link_selector=listing.get("event_link_selector", ""),
+        event_id_attribute=listing.get("event_id_attribute", ""),
+        max_events=int(listing.get("max_events", 0)),
+        ical_url_pattern=detail.get("ical_url_pattern", ""),
+        ical_link_selector=detail.get("ical_link_selector", ""),
         status_selectors=status_selectors,
-        fields=_parse_field_selectors(raw.get("fields") or {}),
-        max_events=int(raw.get("max_events", 0)),
+        fields=_parse_field_selectors(detail.get("fields") or {}),
     )
 
 

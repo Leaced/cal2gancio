@@ -1,17 +1,20 @@
 # HTML source (`source_type: html`)
 
 Scrapes an event listing page to discover individual event URLs, then builds each
-event from an optional per-event iCal file and/or HTML CSS selectors.
+event from an optional per-event iCal file and/or HTML CSS selectors on the detail page.
 
 When both iCal and HTML selectors provide a value for the same field, the
 **explicit HTML selector wins**.
 
 ## How it works
 
-1. Fetch the listing page (`url`) and find all event links via `event_link_selector`
-2. For each event URL: optionally fetch a per-event iCal file (`ical_url_pattern`)
-3. Fetch the event detail page and apply `fields` selectors (override iCal values)
-4. Apply `cancelled_selector` and `status_selectors` for status and extra tags
+1. Fetch the **listing page** (`url`) and collect event links via `listing_page.event_link_selector`.
+2. For each event URL, fetch the **detail page**.
+3. Acquire iCal data via one of two options under `detail_page`:
+   - `ical_link_selector` — find the iCal `<a>` on the detail page and fetch it, or
+   - `ical_url_pattern` — construct the iCal URL from a template (no extra request).
+4. Apply `detail_page.fields` selectors (override iCal values where both exist).
+5. Apply `detail_page.status_selectors` for cancellation, extra tags, and title prefixes.
 
 ## Config reference
 
@@ -20,120 +23,204 @@ sources:
   - source_type: html
     url: https://example.org/events/
     html:
-      # Required: CSS selector that matches <a> links to individual event pages
-      event_link_selector: "a[href*='/events/']"
-
-      # Optional: HTML attribute on the link element to use as {event_id}
-      # in ical_url_pattern (e.g. "data-event-id")
-      event_id_attribute: "data-event-id"
-
-      # Optional: URL pattern for per-event iCal files
-      # {base} = feed url without trailing slash
-      # {slug} = last URL path segment of the event page
-      # {event_id} = value of event_id_attribute (falls back to {slug} if not set)
-      ical_url_pattern: "{base}/?method=ical&id={event_id}"
-
-      # Optional: CSS selector whose presence marks the event as cancelled
-      # Sets _cancelled=True; post-processor applies prefix or delete per feed config
-      cancelled_selector: "img[alt='Fällt aus']"
-
-      # Optional: limit the number of events fetched (0 = unlimited)
-      max_events: 50
-
-      # Optional: apply tags and/or title prefixes when a CSS selector matches
-      # Both "tag" and "title_prefix" are optional; use either or both.
-      status_selectors:
-        - selector: "img[alt='Ausverkauft']"
-          tag: "ausverkauft"
-          title_prefix: "Ausverkauft: "
-        - selector: "img[alt='Verschoben']"
-          tag: "verschoben"
-          title_prefix: "Verschoben: "
-
-      # Optional: override or supplement iCal field values with HTML selectors
-      fields:
-        title:
-          selector: "h1.event-title"
-        start_datetime:
-          selector: ".event-date"
-          format: "%d.%m.%Y %H:%M"   # Python strptime format
-        end_datetime:
-          selector: ".event-end"
-          format: "%d.%m.%Y %H:%M"
-        description:
-          selector: ".event-description"
-          as_html: true               # extract innerHTML instead of text
-        image_url:
-          selector: "img.event-hero"
-          attribute: src              # extract HTML attribute instead of text
-        place_name:
-          selector: ".venue-name"
-        place_address:
-          selector: ".venue-address"
+      listing_page:
+        event_link_selector: "a[href*='/events/']"  # required
+        event_id_attribute: "data-event-id"          # optional
+        max_events: 50                               # optional, 0 = unlimited
+      detail_page:
+        ical_url_pattern: "{base}/?method=ical&id={event_id}"  # see below
+        ical_link_selector: "a[href*='/ical/']"                 # alternative to ical_url_pattern
+        status_selectors:
+          - selector: "img[alt='Fällt aus']"
+            cancelled: true
+          - selector: "img[alt='Ausverkauft']"
+            tag: "ausverkauft"
+            title_prefix: "Ausverkauft: "
+        fields:
+          title:
+            selector: "h1.event-title"
+          start_datetime:
+            selector: ".event-date"
+            format: "%d.%m.%Y %H:%M"
+          end_datetime:
+            selector: ".event-end"
+            format: "%d.%m.%Y %H:%M"
+          description:
+            selector: ".event-description"
+            as_html: true
+          image_url:
+            selector: "img.event-hero"
+            attribute: src
+          place_name:
+            selector: ".venue-name"
+          place_address:
+            selector: ".venue-address"
 ```
 
-## `ical_url_pattern` placeholders
+### `listing_page` options
 
-| Placeholder  | Value |
-| ------------ | ----- |
-| `{base}`     | Feed URL without trailing slash |
-| `{slug}`     | Last path segment of the event page URL |
-| `{event_id}` | Value of `event_id_attribute` on the listing link; falls back to `{slug}` if not configured |
+| Key | Default | Description |
+| --- | ------- | ----------- |
+| `event_link_selector` | — | **Required.** CSS selector matching `<a>` links to individual event pages. |
+| `event_id_attribute` | — | HTML attribute on each link to use as `{event_id}` in `ical_url_pattern` (e.g. `"data-event-id"`). |
+| `max_events` | `0` | Limit events processed. `0` = unlimited. Applied after collecting all links. |
 
-## Field selector options
+### `detail_page` options
 
-| Key         | Default | Description                                         |
-| ----------- | ------- | --------------------------------------------------- |
-| `selector`  | —       | CSS selector (required)                             |
-| `attribute` | —       | Extract this HTML attribute; omit to use text content |
-| `as_html`   | `false` | Extract `innerHTML` as a raw HTML string. Mutually exclusive with `attribute` and `flat_text`. |
-| `flat_text` | `false` | Concatenate all text nodes without any separator (`get_text(strip=True)`). Use when the CMS splits a single value across many inline/block elements (e.g. individual digits in separate `<h1>` tags). Mutually exclusive with `attribute` and `as_html`. |
-| `format`    | —       | `strptime` format string (or YAML list of strings) for `start_datetime` / `end_datetime`. When a list is given, each format is tried in order and the first match wins — useful when a time component is optional. German and English month names (full and 3-letter abbreviations, e.g. `Juli`, `July`, `Jul`) are normalised to two-digit numbers automatically, so `%m` works without system locale changes. |
-| `regex`     | —       | Regex applied to the extracted value; returns capture group 1 if present, otherwise the full match. Useful for extracting URLs from CSS (`style` attribute) or partial strings. |
-| `time_selector` | — | For `start_datetime` / `end_datetime` only: CSS selector for a separate time-of-day element. Its text is appended (space-separated) to the date text before `format` parsing. Requires plain-text or `flat_text` mode (not `as_html` / `attribute`). |
+#### iCal acquisition (choose one)
 
-## Supported field names
+Both options are optional. Omit both to rely entirely on `fields` selectors.
+`ical_link_selector` takes priority if both are set.
 
-| Field name       | Gancio field        |
-| ---------------- | ------------------- |
-| `title`          | `title`             |
-| `start_datetime` | `start_datetime`    |
-| `end_datetime`   | `end_datetime` / `multidate` |
-| `description`    | `description`       |
-| `image_url`      | `image_url`         |
-| `place_name`     | `place_name`        |
-| `place_address`  | `place_address`     |
+| Key | Description |
+| --- | ----------- |
+| `ical_link_selector` | CSS selector for an `<a>` on the detail page whose `href` is the iCal URL. Use when the iCal URL contains a server-generated token (e.g. TYPO3 `cHash`) that cannot be derived from the event slug. |
+| `ical_url_pattern` | URL template constructed without an extra request. Placeholders: `{base}` (feed URL without trailing slash), `{slug}` (last path segment of the event URL), `{event_id}` (value of `event_id_attribute`, falls back to `{slug}`). |
+
+#### `status_selectors`
+
+A list of CSS presence checks. Each matching element triggers one or more side effects.
+All keys except `selector` are optional; use any combination.
+
+| Key | Description |
+| --- | ----------- |
+| `selector` | CSS selector (required). Side effects apply only when this element is found. |
+| `cancelled` | `true` → mark event as cancelled. The post-processor applies a title prefix or deletes the event depending on `delete_cancelled`. |
+| `tag` | Gancio tag added to the event. |
+| `title_prefix` | String prepended to the event title. |
+
+#### `fields`
+
+A map of Gancio field name → extraction config. Overrides the corresponding iCal value
+when both are present.
+
+**Supported field names**
+
+| Field name | Gancio field |
+| ---------- | ------------ |
+| `title` | `title` |
+| `start_datetime` | `start_datetime` |
+| `end_datetime` | `end_datetime` / `multidate` |
+| `description` | `description` |
+| `image_url` | `image_url` |
+| `place_name` | `place_name` |
+| `place_address` | `place_address` |
+
+**Extraction modes** (mutually exclusive; default: block-aware plain text)
+
+| Key | Description |
+| --- | ----------- |
+| `attribute` | Read this HTML attribute of the matched element. |
+| `as_html` | Extract `innerHTML` as a raw HTML string. |
+| `flat_text` | Concatenate all text nodes without separator (`get_text(strip=True)`). Use when the CMS splits a single value across many inline/block elements. |
+
+**Post-extraction transforms** (applied in order)
+
+| Key | Description |
+| --- | ----------- |
+| `regex` | Regex applied to the extracted value; returns capture group 1 if present, otherwise the full match. |
+| `time_selector` | For `start_datetime` / `end_datetime` only: CSS selector for a separate time element. Its text is appended (space-separated) before `format` parsing. Requires plain-text or `flat_text` mode. |
+| `format` | `strptime` format string, or a YAML list tried in order (first match wins — useful when a time component is optional). German and English month names (full and abbreviated, e.g. `Juli`, `July`, `Jul`) are normalised to zero-padded numbers automatically. |
 
 ## UID and identity
 
-- If an iCal file is fetched, its `UID` is used as the stable identity key (`_ical_` tag).
-- Without iCal, the event page URL is used as the identity key (`_uid_is_real: false`).
+- If an iCal file is fetched, its `UID` field is used as the stable identity key.
+- Without iCal, the event page URL is used as the identity key. If the URL changes, the event will be duplicated rather than updated.
 
-## Example: Schlachthof Wiesbaden
+## Examples
+
+### WordPress / The Events Calendar with per-event iCal
 
 ```yaml
-sources:
-  - source_type: html
-    url: https://schlachthof-wiesbaden.de/
-    additional_tags:
-      - schlachthof
-      - wiesbaden
-    html:
+- source_type: html
+  url: https://example.org/events/
+  html:
+    listing_page:
+      event_link_selector: "a[href*='/event/']"
+    detail_page:
+      ical_url_pattern: "https://example.org/event/{slug}/?ical=1"
+```
+
+### HTML-only with field selectors
+
+```yaml
+- source_type: html
+  url: https://example.org/programm/
+  html:
+    listing_page:
+      event_link_selector: "a[href*='/meetups/']"
+    detail_page:
+      fields:
+        title:
+          selector: "h1.info__header"
+        start_datetime:
+          selector: ".date__wrapper"
+          flat_text: true
+          time_selector: ".info__block h1.event__name"
+          format: "%d.%m.%y %H:%M"
+        description:
+          selector: ".rte.about.events"
+          as_html: true
+        image_url:
+          selector: ".info__header__image"
+          attribute: style
+          regex: "url\\(['\"]?([^'\"\\)]+)['\"]?\\)"
+```
+
+### TYPO3 with server-generated iCal URL
+
+TYPO3 appends a `cHash` security token to iCal URLs that cannot be derived from
+the event slug. The token is read directly from the detail page.
+
+```yaml
+- source_type: html
+  url: https://example.org/veranstaltungen/
+  html:
+    listing_page:
+      event_link_selector: "a.teaser__link[href*='/es_detail/']"
+    detail_page:
+      ical_link_selector: "a[href*='/veranstaltung/ical/']"
+```
+
+### WordPress with status selectors (sold out / cancelled / postponed)
+
+```yaml
+- source_type: html
+  url: https://example.org/
+  html:
+    listing_page:
       event_link_selector: "a[href*='/events/']"
+      max_events: 50
+    detail_page:
       ical_url_pattern: "{base}/ics/{slug}.ics"
-      cancelled_selector: "img[alt='Fällt aus']"
       status_selectors:
+        - selector: "img[alt='Fällt aus']"
+          cancelled: true
         - selector: "img[alt='Ausverkauft']"
-          tag: "ausverkauft"
           title_prefix: "Ausverkauft: "
         - selector: "img[alt='Verschoben']"
-          tag: "verschoben"
           title_prefix: "Verschoben: "
       fields:
         description:
-          selector: ".event-description"
-          as_html: true
+          selector: "div.editor.events"
         image_url:
-          selector: "img.event-image"
+          selector: "img[src^='/img/http/']"
           attribute: src
 ```
+
+## Deprecated: flat `html:` structure
+
+The flat form (all options directly under `html:`) is deprecated and will be
+removed in v2.0. A warning is printed at startup.
+
+```yaml
+# deprecated — migrate to listing_page / detail_page
+html:
+  event_link_selector: "a[href*='/events/']"
+  ical_url_pattern: "{base}/ics/{slug}.ics"
+  cancelled_selector: "img[alt='Fällt aus']"
+```
+
+Migration: move `event_link_selector`, `event_id_attribute`, and `max_events`
+under `listing_page`; move all other options under `detail_page`. Replace
+`cancelled_selector: "…"` with a `status_selectors` entry with `cancelled: true`.

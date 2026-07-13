@@ -110,15 +110,13 @@ def fetch_events(feed: FeedConfig) -> list[dict]:
                     if val:
                         event[field_name] = val
 
-            # --- 4. Cancelled selector → _cancelled flag ----------------------
-            if cfg.cancelled_selector and soup.select_one(cfg.cancelled_selector):
-                event["_cancelled"] = True
-
-            # --- 5. Status selectors → extra tags + title prefixes ------------
+            # --- 4. Status selectors → cancelled flag, extra tags, title prefixes
             extra_tags: list[str] = []
             for ss in cfg.status_selectors:
                 if not soup.select_one(ss.selector):
                     continue
+                if ss.cancelled:
+                    event["_cancelled"] = True
                 if ss.tag:
                     extra_tags.append(ss.tag)
                 if ss.title_prefix:
