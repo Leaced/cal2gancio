@@ -46,8 +46,8 @@ _BLOCK_OPEN  = re.compile(
     r"<(?:p|div|h[1-6]|li|tr|blockquote|ul|ol|table|tbody|thead)\b[^>]*>",
     re.IGNORECASE,
 )
-_BLOCK_CLOSE = re.compile(
-    r"<br\s*/?>|</(?:p|div|h[1-6]|li|tr|blockquote|ul|ol|table|tbody|thead)>",
+_BLOCK_END   = re.compile(
+    r"</(?:p|div|h[1-6]|li|tr|blockquote|ul|ol|table|tbody|thead)>",
     re.IGNORECASE,
 )
 _MULTI_BR    = re.compile(r"(?:<br\s*/?>[\s]*){2,}", re.IGNORECASE)
@@ -68,14 +68,15 @@ def _to_html(text: str) -> str:
     if _HTML_TAG.search(text):
         text = _STRIP_NOISE.sub("", text)
         text = _BLOCK_OPEN.sub("", text)
-        text = _BLOCK_CLOSE.sub("<br>", text)
+        text = _BLOCK_END.sub("<br><br>", text)  # closing block tags → paragraph break
+        # explicit <br> in source HTML remain as single breaks
         text = _MULTI_BR.sub("<br><br>", text)
         return _TRAILING_BR.sub("", text).strip()
+    # Plain text (e.g. iCal DESCRIPTION): every \n is a paragraph separator
     text = text.strip()
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    text = text.replace("\n\n", "<br><br>")
-    text = text.replace("\n", "<br>")
-    return text
+    text = text.replace("\n", "<br><br>")
+    text = _MULTI_BR.sub("<br><br>", text)  # deduplicate \n\n → single paragraph break
+    return _TRAILING_BR.sub("", text)
 
 FetchFn = Callable[[FeedConfig], list[dict]]
 
