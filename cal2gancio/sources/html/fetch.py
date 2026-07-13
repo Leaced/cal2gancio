@@ -10,6 +10,7 @@ render a clickable link appended after the description body.
 """
 
 import sys
+from urllib.parse import urljoin
 
 from ...config import FeedConfig
 from ..ical.tags import uid_tag, is_internal
@@ -55,27 +56,39 @@ def fetch_events(feed: FeedConfig) -> list[dict]:
         _progress(i, total, event_url)
         slug = slug_from_url(event_url)
 
-        # --- 1. Optional iCal as base -----------------------------------------
-        event: dict = {}
-        ical_uid_tag: str | None = None
-
-        if cfg.ical_url_pattern:
-            ical_url = cfg.ical_url_pattern.format(
-                base=base_url, slug=slug, event_id=event_id or slug
-            )
-            ical_event = fetch_ical_event(ical_url)
-            if ical_event:
-                event = ical_event
-                ical_uid_tag = ical_event.get("_uid_tag")
-
-        # --- 2. Fetch detail page HTML -----------------------------------------
+        # --- 1. Fetch detail page HTML -----------------------------------------
+        # Must happen first when ical_link_selector is used (the iCal URL is
+        # extracted from the detail page HTML, not derived from a pattern).
         soup = None
         try:
             soup = fetch_detail(event_url)
         except Exception as e:
             print(f"  html: Fehler beim Laden von {event_url}: {e}", file=sys.stderr)
-            if not event:
-                continue
+
+        # --- 2. Optional iCal as base -----------------------------------------
+        event: dict = {}
+        ical_uid_tag: str | None = None
+
+        ical_url: str = ""
+        if cfg.ical_link_selector and soup:
+            el = soup.select_one(cfg.ical_link_selector)
+            if el:
+                href = el.get("href", "")
+                if href:
+                    ical_url = urljoin(event_url, str(href))
+        elif cfg.ical_url_pattern:
+            ical_url = cfg.ical_url_pattern.format(
+                base=base_url, slug=slug, event_id=event_id or slug
+            )
+
+        if ical_url:
+            ical_event = fetch_ical_event(ical_url)
+            if ical_event:
+                event = ical_event
+                ical_uid_tag = ical_event.get("_uid_tag")
+
+        if not event and soup is None:
+            continue
 
         # --- 3. Apply HTML field selectors (override iCal) --------------------
         if soup is not None:
