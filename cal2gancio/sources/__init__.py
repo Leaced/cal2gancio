@@ -110,11 +110,23 @@ def _postprocess(
     events = _apply_additional_tags(events, feed)
     events = _apply_filter(events, feed.filter)
     events = _apply_past_filter(events, feed)
+    events = _apply_place_validation(events)
     events = _apply_cancelled(events, feed, text)
     events = _apply_html_normalization(events)
     events = _apply_description(events, event_link_text, disclaimer)
     events = _apply_content_hash(events)
     return events
+
+
+def _apply_place_validation(events: list[dict]) -> list[dict]:
+    valid = []
+    for event in events:
+        if event.get("place_id") or event.get("place_name"):
+            valid.append(event)
+        else:
+            title = event.get("title", "(no title)")
+            print(f"  ✗ {title}: skipped — no place_name or place_id (add default_place_name to config)")
+    return valid
 
 
 def _apply_place_defaults(events: list[dict], feed: FeedConfig) -> list[dict]:

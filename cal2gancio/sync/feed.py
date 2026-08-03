@@ -7,6 +7,13 @@ from ..gancio      import GancioClient, get_token
 from ..sources     import fetch_for_feed
 from .decision     import delete_cancelled_event, sync_event
 
+def _short_id(event: dict) -> str:
+    for tag in (event.get("tags") or []):
+        if tag.startswith("_ical_"):
+            return tag[len("_ical_"):]
+    return "?"
+
+
 _ICONS = {
     "erstellt":          "✓",
     "aktualisiert":      "✓",
@@ -50,7 +57,8 @@ def sync_feed(
 
         icon    = _ICONS.get(status, "✗")
         warning = "" if event.get("_uid_is_real", True) else "  ⚠ kein UID im Feed"
-        print(f"  {icon} {event['title']} [{status}]{warning}")
+        short_id = _short_id(event)
+        print(f"  {icon} {short_id} - {event['title']} [{status}]{warning}")
 
         if status == "erstellt (Duplikat)":
             counts["Duplikat"] += 1

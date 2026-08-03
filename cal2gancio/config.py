@@ -179,11 +179,12 @@ def _parse_html_config(raw: dict) -> HtmlConfig:
         listing = raw.get("listing_page") or {}
         detail  = raw.get("detail_page")  or {}
     else:
-        print(
-            "  Warning: flat html.* config is deprecated — "
-            "migrate to html.listing_page / html.detail_page.",
-            file=sys.stderr,
-        )
+        if raw:
+            print(
+                "  Warning: flat html.* config is deprecated — "
+                "migrate to html.listing_page / html.detail_page.",
+                file=sys.stderr,
+            )
         listing = detail = raw
 
     status_selectors = [
