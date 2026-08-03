@@ -7,6 +7,7 @@ Using requests' files= parameter with (None, value) tuples forces this encoding.
 """
 
 from dataclasses import dataclass
+from urllib.parse import quote, urlsplit, urlunsplit
 
 
 @dataclass
@@ -14,6 +15,17 @@ class ApiResult:
     success: bool
     gancio_id: int | None
     error: str = ""
+
+
+def _encode_image_url(url: str) -> str:
+    """Percent-encode non-ASCII characters in the path of an image URL.
+
+    Gancio fetches image_url server-side; non-ASCII filenames (e.g. © in the
+    path) cause its HTTP client to receive a 404 unless the path is encoded.
+    """
+    parts = urlsplit(url)
+    encoded_path = quote(parts.path, safe="/:@!$&'()*+,;=")
+    return urlunsplit((parts.scheme, parts.netloc, encoded_path, parts.query, parts.fragment))
 
 
 def to_multipart(data: dict) -> list[tuple]:
@@ -28,7 +40,8 @@ def to_multipart(data: dict) -> list[tuple]:
             for item in value:
                 fields.append((key, (None, str(item))))
         elif value is not None:
-            fields.append((key, (None, str(value))))
+            v = _encode_image_url(str(value)) if key == "image_url" else str(value)
+            fields.append((key, (None, v)))
     return fields
 
 

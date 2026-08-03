@@ -46,8 +46,8 @@ _BLOCK_OPEN  = re.compile(
     r"<(?:p|div|h[1-6]|li|tr|blockquote|ul|ol|table|tbody|thead)\b[^>]*>",
     re.IGNORECASE,
 )
-_BLOCK_CLOSE = re.compile(
-    r"<br\s*/?>|</(?:p|div|h[1-6]|li|tr|blockquote|ul|ol|table|tbody|thead)>",
+_BLOCK_END   = re.compile(
+    r"</(?:p|div|h[1-6]|li|tr|blockquote|ul|ol|table|tbody|thead)>",
     re.IGNORECASE,
 )
 _MULTI_BR    = re.compile(r"(?:<br\s*/?>[\s]*){2,}", re.IGNORECASE)
@@ -68,14 +68,15 @@ def _to_html(text: str) -> str:
     if _HTML_TAG.search(text):
         text = _STRIP_NOISE.sub("", text)
         text = _BLOCK_OPEN.sub("", text)
-        text = _BLOCK_CLOSE.sub("<br>", text)
+        text = _BLOCK_END.sub("<br><br>", text)  # closing block tags → paragraph break
+        # explicit <br> in source HTML remain as single breaks
         text = _MULTI_BR.sub("<br><br>", text)
         return _TRAILING_BR.sub("", text).strip()
+    # Plain text (e.g. iCal DESCRIPTION): every \n is a paragraph separator
     text = text.strip()
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    text = text.replace("\n\n", "<br><br>")
-    text = text.replace("\n", "<br>")
-    return text
+    text = text.replace("\n", "<br><br>")
+    text = _MULTI_BR.sub("<br><br>", text)  # deduplicate \n\n → single paragraph break
+    return _TRAILING_BR.sub("", text)
 
 FetchFn = Callable[[FeedConfig], list[dict]]
 
@@ -109,11 +110,23 @@ def _postprocess(
     events = _apply_additional_tags(events, feed)
     events = _apply_filter(events, feed.filter)
     events = _apply_past_filter(events, feed)
+    events = _apply_place_validation(events)
     events = _apply_cancelled(events, feed, text)
     events = _apply_html_normalization(events)
     events = _apply_description(events, event_link_text, disclaimer)
     events = _apply_content_hash(events)
     return events
+
+
+def _apply_place_validation(events: list[dict]) -> list[dict]:
+    valid = []
+    for event in events:
+        if event.get("place_id") or event.get("place_name"):
+            valid.append(event)
+        else:
+            title = event.get("title", "(no title)")
+            print(f"  ✗ {title}: skipped — no place_name or place_id (add default_place_name to config)")
+    return valid
 
 
 def _apply_place_defaults(events: list[dict], feed: FeedConfig) -> list[dict]:

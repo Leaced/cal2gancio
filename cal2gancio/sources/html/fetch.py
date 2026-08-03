@@ -10,11 +10,12 @@ render a clickable link appended after the description body.
 """
 
 import sys
+from urllib.parse import urljoin
 
 from ...config import FeedConfig
 from ..ical.tags import uid_tag, is_internal
 from .discover import discover_event_urls
-from .extract import fetch_detail, extract_field, parse_datetime, slug_from_url
+from .extract import fetch_detail, extract_field, extract_all_fields, parse_datetime, slug_from_url
 from .ical_fallback import fetch_ical_event
 
 _DATETIME_FIELDS = {"start_datetime", "end_datetime"}
@@ -55,49 +56,83 @@ def fetch_events(feed: FeedConfig) -> list[dict]:
         _progress(i, total, event_url)
         slug = slug_from_url(event_url)
 
-        # --- 1. Optional iCal as base -----------------------------------------
-        event: dict = {}
-        ical_uid_tag: str | None = None
-
-        if cfg.ical_url_pattern:
-            ical_url = cfg.ical_url_pattern.format(
-                base=base_url, slug=slug, event_id=event_id or slug
-            )
-            ical_event = fetch_ical_event(ical_url)
-            if ical_event:
-                event = ical_event
-                ical_uid_tag = ical_event.get("_uid_tag")
-
-        # --- 2. Fetch detail page HTML -----------------------------------------
+        # --- 1. Fetch detail page HTML -----------------------------------------
+        # Must happen first when ical_link_selector is used (the iCal URL is
+        # extracted from the detail page HTML, not derived from a pattern).
         soup = None
         try:
             soup = fetch_detail(event_url)
         except Exception as e:
             print(f"  html: Fehler beim Laden von {event_url}: {e}", file=sys.stderr)
-            if not event:
-                continue
+
+        # --- 2. Optional iCal as base -----------------------------------------
+        event: dict = {}
+        ical_uid_tag: str | None = None
+
+        ical_url: str = ""
+        if cfg.ical_link_selector and soup:
+            el = soup.select_one(cfg.ical_link_selector)
+            if el:
+                href = el.get("href", "")
+                if href:
+                    ical_url = urljoin(event_url, str(href))
+        elif cfg.ical_url_pattern:
+            ical_url = cfg.ical_url_pattern.format(
+                base=base_url, slug=slug, event_id=event_id or slug
+            )
+
+        if ical_url:
+            ical_event = fetch_ical_event(ical_url)
+            if ical_event:
+                event = ical_event
+                ical_uid_tag = ical_event.get("_uid_tag")
+
+        if not event and soup is None:
+            continue
 
         # --- 3. Apply HTML field selectors (override iCal) --------------------
+        multi_datetimes: list[int] = []
+
         if soup is not None:
             for field_name, fs in cfg.fields.items():
                 if field_name in _DATETIME_FIELDS:
-                    ts = parse_datetime(extract_field(soup, fs, event_url), fs.format)
-                    if ts is not None:
-                        event[field_name] = ts
+                    if fs.multi_match and field_name == "start_datetime":
+                        raws = extract_all_fields(soup, fs, event_url)
+                        for raw in raws:
+                            ts = parse_datetime(raw, fs.format)
+                            if ts is not None:
+                                multi_datetimes.append(ts)
+                            elif raw and fs.format:
+                                fmt_hint = fs.format if isinstance(fs.format, str) else " | ".join(fs.format)
+                                print(
+                                    f"  html: start_datetime: Datum konnte nicht geparst werden "
+                                    f"(Text: {raw!r}, Format: {fmt_hint!r})",
+                                    file=sys.stderr,
+                                )
+                    else:
+                        raw = extract_field(soup, fs, event_url)
+                        ts = parse_datetime(raw, fs.format)
+                        if ts is not None:
+                            event[field_name] = ts
+                        elif raw and fs.format:
+                            fmt_hint = fs.format if isinstance(fs.format, str) else " | ".join(fs.format)
+                            print(
+                                f"  html: {field_name}: Datum konnte nicht geparst werden "
+                                f"(Text: {raw!r}, Format: {fmt_hint!r})",
+                                file=sys.stderr,
+                            )
                 else:
                     val = extract_field(soup, fs, event_url)
                     if val:
                         event[field_name] = val
 
-            # --- 4. Cancelled selector → _cancelled flag ----------------------
-            if cfg.cancelled_selector and soup.select_one(cfg.cancelled_selector):
-                event["_cancelled"] = True
-
-            # --- 5. Status selectors → extra tags + title prefixes ------------
+            # --- 4. Status selectors → cancelled flag, extra tags, title prefixes
             extra_tags: list[str] = []
             for ss in cfg.status_selectors:
                 if not soup.select_one(ss.selector):
                     continue
+                if ss.cancelled:
+                    event["_cancelled"] = True
                 if ss.tag:
                     extra_tags.append(ss.tag)
                 if ss.title_prefix:
@@ -109,7 +144,11 @@ def fetch_events(feed: FeedConfig) -> list[dict]:
                 event["tags"] = existing + extra_tags
 
         # --- 6. Guard: require title and start_datetime -----------------------
-        missing = [f for f, k in [("Titel", "title"), ("Startzeit", "start_datetime")] if not event.get(k)]
+        has_datetime = bool(event.get("start_datetime")) or bool(multi_datetimes)
+        missing = (
+            (["Titel"] if not event.get("title") else []) +
+            (["Startzeit"] if not has_datetime else [])
+        )
         if missing:
             print(f"  html: Überspringe {event_url} — {', '.join(missing)} fehlt", file=sys.stderr)
             continue
@@ -127,18 +166,32 @@ def fetch_events(feed: FeedConfig) -> list[dict]:
         # iCal UID takes priority over URL-derived UID.
         user_tags = [t for t in (event.get("tags") or []) if not is_internal(t)]
 
-        if ical_uid_tag:
-            _uid = ical_uid_tag
-            uid_is_real = True
+        if multi_datetimes:
+            # Fan out: one event copy per performance date.
+            # UID is derived from URL + timestamp so each date is independently tracked.
+            for ts in multi_datetimes:
+                ev = dict(event)
+                ev["start_datetime"] = ts
+                if "multidate" not in ev:
+                    ev["multidate"] = 0
+                _uid = uid_tag(f"{event_url}#{ts}")
+                ev["_uid_tag"]     = _uid
+                ev["_uid_is_real"] = False
+                ev["tags"]         = user_tags + [_uid]
+                events.append(ev)
         else:
-            _uid = uid_tag(event_url)
-            uid_is_real = False
+            if ical_uid_tag:
+                _uid = ical_uid_tag
+                uid_is_real = True
+            else:
+                _uid = uid_tag(event_url)
+                uid_is_real = False
 
-        event["_uid_tag"]     = _uid
-        event["_uid_is_real"] = uid_is_real
-        event["tags"]         = user_tags + [_uid]
+            event["_uid_tag"]     = _uid
+            event["_uid_is_real"] = uid_is_real
+            event["tags"]         = user_tags + [_uid]
 
-        events.append(event)
+            events.append(event)
 
     print()  # Newline nach der Progress-Bar
     return events

@@ -29,8 +29,7 @@ def parse_recurrent(component) -> dict | None:
 
     if freq == "WEEKLY":
         frequency = "2w" if interval == 2 else "1w"
-        days = [_DAY_MAP[d] for d in (rrule.get("BYDAY") or []) if d in _DAY_MAP]
-        return {"frequency": frequency, "days": days}
+        return {"frequency": frequency}
 
     if freq == "MONTHLY":
         if rrule.get("BYDAY"):

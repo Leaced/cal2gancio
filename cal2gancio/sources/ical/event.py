@@ -10,6 +10,7 @@ The returned dict contains:
       _hash_tag is NOT set here; it is added later by the post-processor.
 """
 
+import json
 from datetime import datetime, timezone
 
 from .location   import parse_location, parse_geo
@@ -89,9 +90,9 @@ def build_event(component) -> dict | None:
     recurrent   = parse_recurrent(component)
     rec_fields  = {}
     if recurrent:
-        rec_fields["recurrent[frequency]"] = recurrent["frequency"]
-        if recurrent.get("days"):
-            rec_fields["recurrent[days]"] = recurrent["days"]
+        # Gancio expects a single "recurrent" field containing a JSON string.
+        # The weekday is derived server-side from start_datetime; only frequency is required.
+        rec_fields["recurrent"] = json.dumps({"frequency": recurrent["frequency"]})
 
     user_tags = parse_categories(component)
     image_url = parse_image_url(component)

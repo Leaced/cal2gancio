@@ -11,6 +11,7 @@ gancio:
   username: admin@example.org                   # omit for anonymous posting
   password_file: /run/secrets/gancio_password   # default path, ignored without username
   wait: 2.0                                     # seconds between writes (default: 0)
+  # dry_run: true                                # print events as JSON instead of sending to Gancio
 
 text:
   event_link: "Zur Veranstaltung"               # link label for iCal URL field
@@ -51,6 +52,7 @@ sources:
 | `username`      | –        | Login e-mail; omit for anonymous posting (if the instance allows it)             |
 | `password_file` | –        | Path to a file containing the password (default: `/run/secrets/gancio_password`) |
 | `wait`          | –        | Seconds to wait between write requests; use when hitting HTTP 429 (default: `0`) |
+| `dry_run`       | –        | `true`: fetch and post-process events, print as JSON, send nothing to Gancio (default: `false`). The CLI flag `--dry-run` has the same effect without changing the config file. |
 
 ## `text:` section
 

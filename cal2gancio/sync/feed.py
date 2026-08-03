@@ -1,9 +1,18 @@
 """Iterates over all configured feeds and syncs each event."""
 
+import json
+
 from ..config      import AppConfig, FeedConfig, TextConfig
 from ..gancio      import GancioClient, get_token
 from ..sources     import fetch_for_feed
 from .decision     import delete_cancelled_event, sync_event
+
+def _short_id(event: dict) -> str:
+    for tag in (event.get("tags") or []):
+        if tag.startswith("_ical_"):
+            return tag[len("_ical_"):]
+    return "?"
+
 
 _ICONS = {
     "erstellt":          "✓",
@@ -48,7 +57,8 @@ def sync_feed(
 
         icon    = _ICONS.get(status, "✗")
         warning = "" if event.get("_uid_is_real", True) else "  ⚠ kein UID im Feed"
-        print(f"  {icon} {event['title']} [{status}]{warning}")
+        short_id = _short_id(event)
+        print(f"  {icon} {short_id} - {event['title']} [{status}]{warning}")
 
         if status == "erstellt (Duplikat)":
             counts["Duplikat"] += 1
@@ -72,7 +82,38 @@ def sync_feed(
     print(f"  → {', '.join(parts)}")
 
 
+def dry_run_feed(
+    feed: FeedConfig,
+    global_disclaimer: str = "",
+    global_text: TextConfig | None = None,
+) -> None:
+    if global_text is None:
+        global_text = TextConfig()
+
+    print(f"\n→ {feed.url}")
+    disclaimer      = feed.disclaimer      if feed.disclaimer      else global_disclaimer
+    event_link_text = feed.event_link_text if feed.event_link_text else global_text.event_link
+
+    events = fetch_for_feed(feed, disclaimer, event_link_text, text=global_text)
+
+    if not events:
+        print("  (keine Events nach Filtern)")
+        return
+
+    print(f"  {len(events)} Event(s):")
+    for event in events:
+        public = {k: v for k, v in event.items() if not k.startswith("_")}
+        print(json.dumps(public, ensure_ascii=False, indent=2, default=str))
+
+
 def sync_all(cfg: AppConfig) -> None:
+    if cfg.dry_run:
+        print(f"Dry run — {cfg.gancio_url} (keine API-Anfragen)")
+        for feed in cfg.feeds:
+            dry_run_feed(feed, global_disclaimer=cfg.disclaimer, global_text=cfg.text)
+        print("\nFertig.")
+        return
+
     token  = get_token(cfg.gancio_url, cfg.username, cfg.password, cfg.gancio_version) if cfg.username else None
     client = GancioClient(cfg.gancio_url, token, request_delay=cfg.request_delay)
 

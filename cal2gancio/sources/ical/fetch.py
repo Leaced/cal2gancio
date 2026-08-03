@@ -21,6 +21,10 @@ def fetch_events(feed: FeedConfig) -> list[dict]:
         print(f"  Fehler beim Abrufen von {feed.url}: {e}", file=sys.stderr)
         return []
 
+    if not resp.content:
+        print(f"  Feed returned empty response — skipping ({feed.url})", file=sys.stderr)
+        return []
+
     try:
         cal = Calendar.from_ical(resp.content)
     except Exception as e:

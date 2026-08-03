@@ -60,13 +60,16 @@ class FieldSelector:
                       that use plain-text or flat_text mode (not as_html / attribute)
     """
     selector: str
-    attribute: str = ""     # HTML attribute to read; mutually exclusive with as_html / flat_text
-    as_html: bool = False   # extract innerHTML; mutually exclusive with attribute / flat_text
-    flat_text: bool = False # concatenate all text nodes as-is; mutually exclusive with as_html / attribute
-    format: str = ""        # strptime format for start_datetime / end_datetime
-    regex: str = ""         # applied after extraction; group 1 returned if present, else full match
-    time_selector: str = "" # datetime fields only: CSS selector for a separate time element;
-                             # its text is appended (space-separated) before format parsing
+    attribute: str = ""       # HTML attribute to read; mutually exclusive with as_html / flat_text
+    as_html: bool = False     # extract innerHTML; mutually exclusive with attribute / flat_text
+    flat_text: bool = False   # concatenate all text nodes as-is; mutually exclusive with as_html / attribute
+    format: list[str] = field(default_factory=list)  # strptime format(s) for start/end_datetime;
+                              # list → tried in order, first match wins (useful for optional time component)
+    regex: str = ""           # applied after extraction; group 1 returned if present, else full match
+    time_selector: str = ""   # datetime fields only: CSS selector for a separate time element;
+                               # its text is appended (space-separated) before format parsing
+    multi_match: bool = False # start_datetime only: select all matching elements and produce one
+                               # event per parsed datetime instead of only the first match
 
     def __post_init__(self) -> None:
         modes = [m for m, v in [("attribute", self.attribute), ("as_html", self.as_html), ("flat_text", self.flat_text)] if v]
@@ -86,17 +89,20 @@ class StatusSelector:
     selector: str
     tag: str = ""           # Gancio tag added when selector matches
     title_prefix: str = ""  # prepended to event title when selector matches
+    cancelled: bool = False # marks event as cancelled when selector matches
 
 
 @dataclass
 class HtmlConfig:
+    # listing page
     event_link_selector: str = ""
-    event_id_attribute: str = ""   # HTML attribute on the link element to use as {event_id} in ical_url_pattern
-    ical_url_pattern: str = ""     # optional; placeholders: {base}, {slug}, {event_id}
-    cancelled_selector: str = ""
+    event_id_attribute: str = ""
+    max_events: int = 0
+    # detail page
+    ical_url_pattern: str = ""
+    ical_link_selector: str = ""
     status_selectors: list[StatusSelector] = field(default_factory=list)
     fields: dict[str, FieldSelector] = field(default_factory=dict)
-    max_events: int = 0            # 0 = unlimited
 
 
 @dataclass
@@ -136,6 +142,7 @@ class AppConfig:
     disclaimer: str
     text: TextConfig
     feeds: list[FeedConfig]
+    dry_run: bool = False
 
 
 def _parse_field_selectors(raw: dict) -> dict[str, FieldSelector]:
@@ -146,35 +153,64 @@ def _parse_field_selectors(raw: dict) -> dict[str, FieldSelector]:
         if isinstance(cfg, str):
             result[name] = FieldSelector(selector=cfg)
         else:
+            raw_fmt = cfg.get("format", "")
+            if isinstance(raw_fmt, list):
+                fmt_list = [str(f) for f in raw_fmt if f]
+            elif raw_fmt:
+                fmt_list = [str(raw_fmt)]
+            else:
+                fmt_list = []
             result[name] = FieldSelector(
                 selector=cfg.get("selector", ""),
                 attribute=cfg.get("attribute", ""),
                 as_html=bool(cfg.get("as_html", False)),
                 flat_text=bool(cfg.get("flat_text", False)),
-                format=cfg.get("format", ""),
+                format=fmt_list,
                 regex=cfg.get("regex", ""),
                 time_selector=cfg.get("time_selector", ""),
+                multi_match=bool(cfg.get("multi_match", False)),
             )
     return result
 
 
 def _parse_html_config(raw: dict) -> HtmlConfig:
+    is_nested = "listing_page" in raw or "detail_page" in raw
+    if is_nested:
+        listing = raw.get("listing_page") or {}
+        detail  = raw.get("detail_page")  or {}
+    else:
+        if raw:
+            print(
+                "  Warning: flat html.* config is deprecated — "
+                "migrate to html.listing_page / html.detail_page.",
+                file=sys.stderr,
+            )
+        listing = detail = raw
+
     status_selectors = [
         StatusSelector(
             selector=item["selector"],
             tag=item.get("tag", ""),
             title_prefix=item.get("title_prefix", ""),
+            cancelled=bool(item.get("cancelled", False)),
         )
-        for item in (raw.get("status_selectors") or [])
+        for item in (detail.get("status_selectors") or [])
     ]
+    # Flat-form compat: cancelled_selector → StatusSelector(cancelled=True)
+    if not is_nested and raw.get("cancelled_selector"):
+        status_selectors.insert(0, StatusSelector(
+            selector=raw["cancelled_selector"],
+            cancelled=True,
+        ))
+
     return HtmlConfig(
-        event_link_selector=raw.get("event_link_selector", ""),
-        event_id_attribute=raw.get("event_id_attribute", ""),
-        ical_url_pattern=raw.get("ical_url_pattern", ""),
-        cancelled_selector=raw.get("cancelled_selector", ""),
+        event_link_selector=listing.get("event_link_selector", ""),
+        event_id_attribute=listing.get("event_id_attribute", ""),
+        max_events=int(listing.get("max_events", 0)),
+        ical_url_pattern=detail.get("ical_url_pattern", ""),
+        ical_link_selector=detail.get("ical_link_selector", ""),
         status_selectors=status_selectors,
-        fields=_parse_field_selectors(raw.get("fields") or {}),
-        max_events=int(raw.get("max_events", 0)),
+        fields=_parse_field_selectors(detail.get("fields") or {}),
     )
 
 
@@ -185,7 +221,7 @@ def _parse_filter(raw: dict) -> FilterConfig:
     )
 
 
-def load() -> AppConfig:
+def load(dry_run: bool = False) -> AppConfig:
     if not CONFIG_PATH.exists():
         print(f"Error: config not found at {CONFIG_PATH}", file=sys.stderr)
         sys.exit(1)
@@ -203,9 +239,11 @@ def load() -> AppConfig:
         print("Error: missing sources", file=sys.stderr)
         sys.exit(1)
 
+    _dry_run = dry_run or bool(gancio.get("dry_run", False))
+
     username = gancio.get("username") or ""
     password = ""
-    if username:
+    if username and not _dry_run:
         try:
             password = Path(gancio.get("password_file", "/run/secrets/gancio_password")).read_text().strip()
         except OSError as e:
@@ -248,4 +286,5 @@ def load() -> AppConfig:
         disclaimer=raw.get("disclaimer", ""),
         text=text,
         feeds=feeds,
+        dry_run=_dry_run,
     )

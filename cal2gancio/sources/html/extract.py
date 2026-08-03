@@ -9,6 +9,7 @@ import requests
 from bs4 import BeautifulSoup, Tag
 
 from ...config import FieldSelector
+from ..parse_utils import normalize_month_names
 
 _HEADERS = {"User-Agent": "cal2gancio/1.0 (+https://github.com/Leaced/cal2gancio)"}
 
@@ -49,11 +50,8 @@ def _html_to_text(el: Tag) -> str:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
 
 
-def extract_field(soup: BeautifulSoup, fs: FieldSelector, page_url: str = "") -> str:
-    el = soup.select_one(fs.selector)
-    if el is None:
-        return ""
-
+def _extract_value(el: Tag, fs: FieldSelector, page_url: str = "") -> str:
+    """Extract a value from a single already-selected element."""
     if fs.attribute:
         value = el.get(fs.attribute, "").strip()
         if value and page_url and value.startswith("/"):
@@ -69,6 +67,16 @@ def extract_field(soup: BeautifulSoup, fs: FieldSelector, page_url: str = "") ->
         m = re.search(fs.regex, value)
         value = (m.group(1) if m and m.lastindex else m.group(0) if m else "")
 
+    return value
+
+
+def extract_field(soup: BeautifulSoup, fs: FieldSelector, page_url: str = "") -> str:
+    el = soup.select_one(fs.selector)
+    if el is None:
+        return ""
+
+    value = _extract_value(el, fs, page_url)
+
     if fs.time_selector and value:
         time_el = soup.select_one(fs.time_selector)
         if time_el:
@@ -79,16 +87,32 @@ def extract_field(soup: BeautifulSoup, fs: FieldSelector, page_url: str = "") ->
     return value
 
 
-def parse_datetime(text: str, fmt: str) -> int | None:
+def extract_all_fields(soup: BeautifulSoup, fs: FieldSelector, page_url: str = "") -> list[str]:
+    """Extract a value from every element matching fs.selector (for multi_match)."""
+    return [_extract_value(el, fs, page_url) for el in soup.select(fs.selector)]
+
+
+def parse_datetime(text: str, fmt: str | list[str]) -> int | None:
+    """Parse a date/time string using one or more strptime formats.
+
+    German and English month names (full and 3-letter abbreviations) are
+    normalized to two-digit numbers before parsing, so formats like
+    ``%d. %m. %Y`` work without locale changes.
+    If *fmt* is a list, each format is tried in order; the first match wins.
+    """
     if not text or not fmt:
         return None
-    try:
-        dt = datetime.strptime(text.strip(), fmt)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return int(dt.timestamp())
-    except ValueError:
-        return None
+    text = normalize_month_names(text.strip())
+    formats = [fmt] if isinstance(fmt, str) else fmt
+    for f in formats:
+        try:
+            dt = datetime.strptime(text, f)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return int(dt.timestamp())
+        except ValueError:
+            continue
+    return None
 
 
 def slug_from_url(url: str) -> str:

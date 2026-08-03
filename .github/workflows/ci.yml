@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - uses: fsfe/reuse-action@676e2d560c9a403aa252096d99fcab3e1132b0f5 # v6
 
-  # ── 1. Build, push, scan (reusable) ──────────────────────────────────────
+  # ── 1. Build, push, scan ─────────────────────────────────────────────────
   build-push-scan:
     needs: [reuse]
     uses: ./.github/workflows/_build-scan.yml

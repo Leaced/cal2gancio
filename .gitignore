@@ -13,8 +13,9 @@ build/
 venv/
 env/
 
-# Local config (contains credentials)
+# Local config
 config.yml
+notes.yml
 
 # Editor / OS
 .DS_Store
