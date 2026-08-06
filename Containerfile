@@ -6,7 +6,7 @@
 # Build:  buildah build -t cal2gancio .
 
 # ── Stage 1: dependency installation ────────────────────────────────────────
-FROM docker.io/python:3.14.6-slim AS builder
+FROM docker.io/python:3.14.7-slim AS builder
 
 WORKDIR /install
 
@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir --prefix=/install/deps -r requirements.txt --root
 
 
 # ── Stage 2: minimal runtime image ──────────────────────────────────────────
-FROM docker.io/python:3.14.6-alpine3.24
+FROM docker.io/python:3.14.7-alpine3.24
 
 LABEL org.opencontainers.image.title="cal2gancio" \
       org.opencontainers.image.description="Sync iCal feeds to a Gancio instance" \
