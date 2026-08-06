@@ -26,12 +26,12 @@ concurrency:
 # further restricted — this is a single-maintainer project.
 permissions:
   contents: write        # semantic-release: create tags + GitHub releases
-  packages: write        # ghcr.io push
+  packages: write        # ghcr.io push (PR: pr-N-sha; main: re-tag for release)
   issues: write          # semantic-release: close referenced issues
   pull-requests: write   # semantic-release: comment on PRs
   security-events: write # trivy: upload SARIF to GitHub Security tab
   actions: read          # codeql-action/upload-sarif: workflow metadata access
-  id-token: write        # cosign keyless signing via OIDC (passed to reusable workflow)
+  id-token: write        # cosign keyless signing via OIDC
 
 jobs:
   # ── 0. REUSE licence compliance ──────────────────────────────────────────
@@ -41,15 +41,39 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - uses: fsfe/reuse-action@676e2d560c9a403aa252096d99fcab3e1132b0f5 # v6
 
-  # ── 1. Build, push, scan ─────────────────────────────────────────────────
+  # ── 1. Build, push, scan (PR only) ───────────────────────────────────────
   build-push-scan:
+    if: github.event_name == 'pull_request'
     needs: [reuse]
     uses: ./.github/workflows/_build-scan.yml
     secrets: inherit
 
-  # ── 2. Semantic release + image tagging ──────────────────────────────────
-  release:
+  # ── 2. Dry-run release preview (PR only) ─────────────────────────────────
+  release-dry-run:
+    if: github.event_name == 'pull_request'
     needs: [build-push-scan]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout (full history for semantic-release)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Semantic Release (dry run)
+        uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90 # v6.0.0
+        with:
+          dry_run: true
+          extra_plugins: |
+            @semantic-release/commit-analyzer
+            @semantic-release/release-notes-generator
+            @semantic-release/github
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── 3. Semantic release + image re-tag (main only) ───────────────────────
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [reuse]
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout (full history for semantic-release)
@@ -61,9 +85,6 @@ jobs:
         id: semantic
         uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90 # v6.0.0
         with:
-          # On PR: dry-run previews the next version without publishing.
-          # On main: creates the GitHub release and git tag.
-          dry_run: ${{ github.event_name == 'pull_request' }}
           extra_plugins: |
             @semantic-release/commit-analyzer
             @semantic-release/release-notes-generator
@@ -71,14 +92,33 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Tag release image (vX.X.X + latest)
+      - name: Re-tag PR image as release
         if: steps.semantic.outputs.new_release_published == 'true'
         env:
-          SRC:     ${{ needs.build-push-scan.outputs.scan-ref }}
-          VERSION: ${{ steps.semantic.outputs.new_release_version }}
-          IMAGE:   ghcr.io/${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          IMAGE="${IMAGE,,}"
-          echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
+          set -euo pipefail
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+          VERSION="${{ steps.semantic.outputs.new_release_version }}"
+
+          # Find the PR that introduced this commit to main
+          # .[0] // {} guards against an empty result array (no PR found)
+          PR_JSON=$(gh api "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
+            --jq '.[0] // {} | {number: .number, sha: (.head.sha // "")[0:8]}' \
+            2>/dev/null || echo '{}')
+
+          PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number // empty')
+          PR_HEAD_SHA=$(echo "$PR_JSON" | jq -r '.sha // empty')
+
+          if [[ -z "$PR_NUMBER" || -z "$PR_HEAD_SHA" ]]; then
+            echo "::error::No PR found for ${GITHUB_SHA} — cannot locate source image."
+            exit 1
+          fi
+
+          SRC="${IMAGE}:pr-${PR_NUMBER}-${PR_HEAD_SHA}"
+          echo "Re-tagging ${SRC} → v${VERSION} + latest"
+
+          echo "${{ secrets.GITHUB_TOKEN }}" | \
+            skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
           skopeo copy "docker://${SRC}" "docker://${IMAGE}:v${VERSION}"
           skopeo copy "docker://${SRC}" "docker://${IMAGE}:latest"

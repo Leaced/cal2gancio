@@ -29,6 +29,9 @@ def sync_event(event: dict, client: GancioClient) -> str:
     "erstellt" | "aktualisiert" | "unverändert" | "erstellt (Duplikat)" |
     "vergangen" | "Fehler: …"
     """
+    if not event.get("place_id") and not (event.get("place_name") and event.get("place_address")):
+        return "Fehler: place_name/place_address fehlen"
+
     uid_tag  = event["_uid_tag"]
     hash_tag = event["_hash_tag"]
 
