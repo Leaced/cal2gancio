@@ -37,7 +37,7 @@ COPY cal2gancio/ ./cal2gancio/
 
 # Config mount point with correct ownership
 RUN mkdir -p /opt/cal2gancio \
- && chown cal2gancio /opt/cal2gancio
+      && chown cal2gancio /opt/cal2gancio
 
 USER cal2gancio
 

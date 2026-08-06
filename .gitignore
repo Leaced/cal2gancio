@@ -16,6 +16,7 @@ env/
 # Local config
 config.yml
 notes.yml
+.claude
 
 # Editor / OS
 .DS_Store
