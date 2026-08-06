@@ -36,35 +36,38 @@ jobs:
 
           DELETED_IMAGES=0
           DELETED_SIGS=0
+          DELETED_ATTS=0
+
+          delete_ancillary() {
+            local tag="$1" label="$2"
+            local vid
+            vid=$(jq -r --arg t "$tag" \
+              'select(.metadata.container.tags | contains([$t])) | .id' \
+              /tmp/versions.ndjson | head -1)
+            if [[ -n "$vid" ]]; then
+              echo "  Deleting ${label}: ${tag} (id=${vid})"
+              gh api --method DELETE \
+                "/user/packages/container/${PACKAGE}/versions/${vid}" \
+                || echo "  ⚠ Could not delete ${label}."
+            fi
+          }
 
           while IFS= read -r v; do
             image_id=$(echo "$v" | jq -r '.id')
             digest=$(echo "$v" | jq -r '.name')
 
-            # Derive cosign sig tag: sha256:ABC... → sha256-ABC....sig
+            # Derive cosign sig and SLSA attestation tags from the image digest
             sig_tag="${digest/sha256:/sha256-}.sig"
+            att_tag="${digest/sha256:/sha256-}.att"
 
             echo "Deleting image: ${digest} (id=${image_id})"
             if gh api --method DELETE \
                 "/user/packages/container/${PACKAGE}/versions/${image_id}"; then
               DELETED_IMAGES=$((DELETED_IMAGES + 1))
-
-              # Find and delete the matching sig version from the cached list
-              sig_id=$(jq -r --arg t "$sig_tag" \
-                'select(.metadata.container.tags | contains([$t])) | .id' \
-                /tmp/versions.ndjson | head -1)
-
-              if [[ -n "$sig_id" ]]; then
-                echo "  Deleting sig: ${sig_tag} (id=${sig_id})"
-                if gh api --method DELETE \
-                    "/user/packages/container/${PACKAGE}/versions/${sig_id}"; then
-                  DELETED_SIGS=$((DELETED_SIGS + 1))
-                else
-                  echo "  ⚠ Could not delete sig."
-                fi
-              fi
+              delete_ancillary "$sig_tag" "sig"  && DELETED_SIGS=$((DELETED_SIGS + 1)) || true
+              delete_ancillary "$att_tag" "att"  && DELETED_ATTS=$((DELETED_ATTS + 1)) || true
             else
-              echo "  ⚠ Could not delete image — skipping sig."
+              echo "  ⚠ Could not delete image — skipping sig/att."
             fi
 
           done < <(jq -c --arg prefix "$PREFIX" --arg skip "$SKIP_TAG" '
@@ -75,4 +78,4 @@ jobs:
             )
           ' /tmp/versions.ndjson)
 
-          echo "Done: ${DELETED_IMAGES} image(s), ${DELETED_SIGS} signature(s) deleted."
+          echo "Done: ${DELETED_IMAGES} image(s), ${DELETED_SIGS} sig(s), ${DELETED_ATTS} att(s) deleted."

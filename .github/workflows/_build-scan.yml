@@ -20,7 +20,8 @@ jobs:
       packages: write
       security-events: write
       actions: read            # codeql-action/upload-sarif needs this for workflow metadata
-      id-token: write          # cosign: OIDC token for keyless signing
+      id-token: write          # cosign + attest-build-provenance: OIDC token for keyless signing
+      attestations: write      # attest-build-provenance: write SLSA provenance attestation
     outputs:
       scan-ref: ${{ steps.scan-ref.outputs.ref }}
 
@@ -38,6 +39,7 @@ jobs:
           SHA="${GITHUB_SHA::8}"
           IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
           TAGS="${IMAGE}:pr-${{ github.event.number }}-${SHA}"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
           {
             echo "tags<<EOF"
             echo "${TAGS}"
@@ -75,13 +77,19 @@ jobs:
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       - name: Sign image with Cosign (keyless)
-        continue-on-error: true
         run: |
           cosign sign --yes \
             "ghcr.io/${GITHUB_REPOSITORY,,}@${{ steps.push.outputs.digest }}"
         env:
           COSIGN_REGISTRY_USERNAME: ${{ github.actor }}
           COSIGN_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attest build provenance (SLSA)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name:   ${{ steps.tags.outputs.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
 
       - name: Trivy vulnerability scan (SARIF)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
