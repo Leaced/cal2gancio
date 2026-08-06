@@ -1,6 +1,6 @@
 name: _build-scan (reusable)
 
-# Called by ci.yml for pull_request events only.
+# Called by ci.yml (PR-only workflow).
 # Builds a single-arch OCI image, pushes it as pr-N-sha, signs it, then runs Trivy.
 # Pipeline fails on CRITICAL or HIGH vulnerabilities where a fix is available
 # (--ignore-unfixed skips issues with no upstream patch yet).
@@ -26,13 +26,6 @@ jobs:
       scan-ref: ${{ steps.scan-ref.outputs.ref }}
 
     steps:
-      - name: Assert PR context
-        run: |
-          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
-            echo "::error::_build-scan.yml must only be called for pull_request events."
-            exit 1
-          fi
-
       - name: Compute image tags
         id: tags
         run: |
