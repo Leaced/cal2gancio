@@ -9,6 +9,12 @@
   },
   "packageRules": [
     {
+      "description": "No digest-only updates for GitHub Actions — tag updates already include the new digest",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["digest"],
+      "enabled": false
+    },
+    {
       "description": "Automerge non-major updates and digest pins",
       "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
       "automerge": true
