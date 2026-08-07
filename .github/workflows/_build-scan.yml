@@ -87,17 +87,11 @@ jobs:
           COSIGN_REGISTRY_USERNAME: ${{ github.actor }}
           COSIGN_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Authenticate to GHCR for attestation
-        # push-to-registry: true on the attest action reads from ~/.docker/config.json;
-        # redhat-actions/push-to-registry manages its own auth and does not write it.
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-
       - name: Attest build provenance (SLSA)
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
           subject-name:   ${{ steps.tags.outputs.image }}
           subject-digest: ${{ steps.push.outputs.digest }}
-          push-to-registry: true
 
       - name: Trivy vulnerability scan (SARIF)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
