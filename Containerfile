@@ -27,6 +27,11 @@ LABEL org.opencontainers.image.title="cal2gancio" \
 # Non-root user
 RUN adduser -S -H -s /sbin/nologin -u 1312 cal2gancio
 
+# Remove the base image's bundled setuptools (70.3.0, CVE-2025-47273) so that
+# after the COPY below the merged filesystem contains only setuptools==78.1.1
+# from requirements.txt — two coexisting dist-infos would let Trivy flag the old one.
+RUN pip uninstall -y setuptools
+
 WORKDIR /app
 
 # Copy pre-built dependencies from builder stage (no pip in final image)
