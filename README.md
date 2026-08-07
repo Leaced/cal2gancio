@@ -52,6 +52,20 @@ sources:
 | [HTML source](docs/sources/html.md) | CSS selector config, field mapping, example |
 | [Adding a source type](docs/adding-a-source.md) | How to implement and register a new source type |
 
+## Image verification
+
+All release images are signed with [Cosign](https://docs.sigstore.dev/cosign/overview/) in keyless mode via GitHub Actions.
+The signing identity is the CI workflow that built the image (`_build-scan.yml`), not the release workflow —
+because `skopeo copy` re-tags the manifest without rebuilding it, so the original signature remains authoritative.
+
+```bash
+cosign verify \
+  --certificate-identity-regexp \
+    "https://github.com/Leaced/cal2gancio/.github/workflows/_build-scan.yml@refs/pull/[0-9]+/merge" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  ghcr.io/leaced/cal2gancio:latest
+```
+
 ## Project structure
 
 ```
