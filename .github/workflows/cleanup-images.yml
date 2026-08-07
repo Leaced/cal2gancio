@@ -32,7 +32,7 @@ jobs:
 
           # Fetch all package versions once
           gh api "/user/packages/container/${PACKAGE}/versions" --paginate \
-            --jq '.[]' -c > /tmp/versions.ndjson
+            | jq -c '.[]' > /tmp/versions.ndjson
 
           DELETED_IMAGES=0
           DELETED_SIGS=0

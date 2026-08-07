@@ -29,7 +29,11 @@ jobs:
       - name: Compute image tags
         id: tags
         run: |
-          SHA="${GITHUB_SHA::8}"
+          # Use the PR head commit SHA, not GITHUB_SHA: in pull_request events
+          # GITHUB_SHA is GitHub's temporary test-merge commit, which differs
+          # from head.sha that the release workflow uses to locate this image.
+          SHA="${{ github.event.pull_request.head.sha }}"
+          SHA="${SHA::8}"
           IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
           TAGS="${IMAGE}:pr-${{ github.event.number }}-${SHA}"
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
@@ -62,7 +66,8 @@ jobs:
       - name: Set scan-ref
         id: scan-ref
         run: |
-          SHA="${GITHUB_SHA::8}"
+          SHA="${{ github.event.pull_request.head.sha }}"
+          SHA="${SHA::8}"
           echo "ref=ghcr.io/${GITHUB_REPOSITORY,,}:pr-${{ github.event.number }}-${SHA}" \
             >> "$GITHUB_OUTPUT"
 
