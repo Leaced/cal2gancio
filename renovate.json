@@ -1,6 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended", "helpers:pinGitHubActionDigests", ":semanticCommits"],
+  "baseBranches": ["develop"],
   "gitAuthor": "renovate[bot] <29139614+renovate[bot]@users.noreply.github.com>",
   "dockerfile": {
     "managerFilePatterns": [
@@ -8,6 +9,12 @@
     ]
   },
   "packageRules": [
+    {
+      "description": "No digest-only updates for GitHub Actions — tag updates already include the new digest",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["digest"],
+      "enabled": false
+    },
     {
       "description": "Automerge non-major updates and digest pins",
       "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
