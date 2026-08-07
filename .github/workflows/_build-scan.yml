@@ -77,6 +77,11 @@ jobs:
           COSIGN_REGISTRY_USERNAME: ${{ github.actor }}
           COSIGN_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Authenticate to GHCR for attestation
+        # push-to-registry: true on the attest action reads from ~/.docker/config.json;
+        # redhat-actions/push-to-registry manages its own auth and does not write it.
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
       - name: Attest build provenance (SLSA)
         uses: actions/attest-build-provenance@v2
         with:
