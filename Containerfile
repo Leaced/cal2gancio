@@ -1,11 +1,12 @@
 # cal2gancio – Multi-stage OCI Container Image
 #
-# Stage 0 (python-stripped): strips pip and setuptools from the Alpine Python image.
+# Stage 0 (python-stripped): strips pip and setuptools via uninstall.
 #   COPY --from reads the *merged* filesystem of the source stage, so whiteouts
 #   are resolved before the copy — the bytes never land in any runtime layer.
-# Stage 1 (builder):        installs Python dependencies into an isolated prefix
-# Stage 2 (runtime):        Alpine base + Python from python-stripped + deps from builder;
-#                            no pip, no setuptools, no CVE bytes anywhere in the image
+# Stage 1 (builder):         installs Python dependencies into an isolated prefix
+# Stage 2 (runtime):         FROM scratch + full rootfs from python-stripped;
+#                             no pip, no setuptools, no CVE bytes in any layer,
+#                             no apk packages to maintain independently
 #
 # Build:  buildah build -t cal2gancio .
 
@@ -24,32 +25,25 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install/deps -r requirements.txt --root-user-action=ignore
 
 # ── Stage 2: minimal runtime image ──────────────────────────────────────────
-FROM alpine:3.24
+FROM scratch
 
 LABEL org.opencontainers.image.title="cal2gancio" \
       org.opencontainers.image.description="Sync iCal feeds to a Gancio instance" \
       org.opencontainers.image.source="https://github.com/Leaced/cal2gancio" \
       org.opencontainers.image.licenses="EUPL-1.2"
 
-# System libraries Python 3.14.7 links against, plus CA certs and timezone data
-RUN apk add --no-cache \
-      ca-certificates \
-      libffi \
-      openssl \
-      tzdata \
-      libyaml \
-      bzip2 \
-      xz-libs \
-      expat \
-    && adduser -S -H -s /sbin/nologin -u 1312 cal2gancio
+# Copy the full Alpine rootfs from python-stripped.
+# FROM scratch contributes no layers; this COPY layer reflects the merged
+# filesystem — system libraries, Python runtime, everything python-stripped
+# ships — minus pip and setuptools (resolved out by the whiteouts above).
+COPY --from=python-stripped / /
 
-# Python runtime from python-stripped: merged FS has no pip and no setuptools —
-# those bytes are absent from this COPY layer, not merely hidden by a whiteout.
-COPY --from=python-stripped /usr/local /usr/local
+# Non-root user (BusyBox sh is available after the COPY above)
+RUN adduser -S -H -s /sbin/nologin -u 1312 cal2gancio
 
 WORKDIR /app
 
-# App dependencies from builder (no pip, no setuptools in requirements.txt)
+# Copy pre-built dependencies from builder stage (no pip in final image)
 COPY --from=builder /install/deps /usr/local
 
 # Copy application source
