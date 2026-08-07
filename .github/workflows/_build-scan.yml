@@ -1,7 +1,7 @@
 name: _build-scan (reusable)
 
-# Called by ci.yml. Computes image tags, builds a single-arch OCI image,
-# pushes it to ghcr.io, then runs Trivy.
+# Called by ci.yml (PR-only workflow).
+# Builds a single-arch OCI image, pushes it as pr-N-sha, signs it, then runs Trivy.
 # Pipeline fails on CRITICAL or HIGH vulnerabilities where a fix is available
 # (--ignore-unfixed skips issues with no upstream patch yet).
 
@@ -20,9 +20,10 @@ jobs:
       packages: write
       security-events: write
       actions: read            # codeql-action/upload-sarif needs this for workflow metadata
-      id-token: write          # cosign: OIDC token for keyless signing
+      id-token: write          # cosign + attest-build-provenance: OIDC token for keyless signing
+      attestations: write      # attest-build-provenance: write SLSA provenance attestation
     outputs:
-      scan-ref: ${{ steps.tags.outputs.scan-ref }}
+      scan-ref: ${{ steps.scan-ref.outputs.ref }}
 
     steps:
       - name: Compute image tags
@@ -30,16 +31,8 @@ jobs:
         run: |
           SHA="${GITHUB_SHA::8}"
           IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
-
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            SCAN_REF="${IMAGE}:pr-${{ github.event.number }}-${SHA}"
-            TAGS="${SCAN_REF}"
-          else
-            SCAN_REF="${IMAGE}:main-${SHA}"
-            TAGS="${SCAN_REF}"$'\n'"${IMAGE}:main"
-          fi
-
-          echo "scan-ref=${SCAN_REF}" >> "$GITHUB_OUTPUT"
+          TAGS="${IMAGE}:pr-${{ github.event.number }}-${SHA}"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
           {
             echo "tags<<EOF"
             echo "${TAGS}"
@@ -66,11 +59,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set scan-ref
+        id: scan-ref
+        run: |
+          SHA="${GITHUB_SHA::8}"
+          echo "ref=ghcr.io/${GITHUB_REPOSITORY,,}:pr-${{ github.event.number }}-${SHA}" \
+            >> "$GITHUB_OUTPUT"
+
       - name: Install Cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       - name: Sign image with Cosign (keyless)
-        continue-on-error: true
         run: |
           cosign sign --yes \
             "ghcr.io/${GITHUB_REPOSITORY,,}@${{ steps.push.outputs.digest }}"
@@ -78,10 +77,22 @@ jobs:
           COSIGN_REGISTRY_USERNAME: ${{ github.actor }}
           COSIGN_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Authenticate to GHCR for attestation
+        # push-to-registry: true on the attest action reads from ~/.docker/config.json;
+        # redhat-actions/push-to-registry manages its own auth and does not write it.
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Attest build provenance (SLSA)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name:   ${{ steps.tags.outputs.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
       - name: Trivy vulnerability scan (SARIF)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref:      ${{ steps.tags.outputs.scan-ref }}
+          image-ref:      ${{ steps.scan-ref.outputs.ref }}
           format:         sarif
           output:         trivy-results.sarif
           ignore-unfixed: true
@@ -101,7 +112,7 @@ jobs:
       - name: Fail on fixable CRITICAL/HIGH vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref:      ${{ steps.tags.outputs.scan-ref }}
+          image-ref:      ${{ steps.scan-ref.outputs.ref }}
           format:         table
           exit-code:      "1"
           ignore-unfixed: true

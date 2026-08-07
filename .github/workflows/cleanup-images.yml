@@ -1,22 +1,9 @@
 name: Cleanup container images
 
 on:
-  # Remove PR images when a PR is closed (merged or dismissed).
+  # Remove PR images (and their cosign signatures) when a PR is closed.
   pull_request:
     types: [closed]
-    paths-ignore:
-      - '**.md'
-      - 'config.yml'
-      - '.github/**'
-      - 'renovate.json'
-  # Remove stale main-<sha> and untagged images after every push to main.
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'config.yml'
-      - '.github/**'
-      - 'renovate.json'
 
 jobs:
   cleanup:
@@ -24,52 +11,71 @@ jobs:
     permissions:
       packages: write
     steps:
-      - name: Delete PR container image versions
-        if: github.event_name == 'pull_request'
+      - name: Delete PR images and their cosign signatures
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.number }}
         run: |
+          set -euo pipefail
           PACKAGE="${GITHUB_REPOSITORY##*/}"
           PREFIX="pr-${PR_NUMBER}-"
 
-          # Only delete versions where every tag belongs to this PR.
-          # Versions also tagged as latest, main, or vX.Y.Z are skipped.
+          # For merged PRs, skip the HEAD commit image: the release pipeline needs
+          # it as the source for skopeo re-tag. Once re-tagged as vX.Y.Z the version
+          # is protected by the tag filter and will never be accidentally deleted.
+          SKIP_TAG=""
+          if [[ "${{ github.event.pull_request.merged }}" == "true" ]]; then
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+            SKIP_TAG="${PREFIX}${HEAD_SHA:0:8}"
+            echo "PR merged — skipping ${SKIP_TAG} (source for release re-tag)"
+          fi
+
+          # Fetch all package versions once
           gh api "/user/packages/container/${PACKAGE}/versions" --paginate \
-            --jq ".[] | select(
+            --jq '.[]' -c > /tmp/versions.ndjson
+
+          DELETED_IMAGES=0
+          DELETED_SIGS=0
+          DELETED_ATTS=0
+
+          delete_ancillary() {
+            local tag="$1" label="$2"
+            local vid
+            vid=$(jq -r --arg t "$tag" \
+              'select(.metadata.container.tags | contains([$t])) | .id' \
+              /tmp/versions.ndjson | head -1)
+            if [[ -n "$vid" ]]; then
+              echo "  Deleting ${label}: ${tag} (id=${vid})"
+              gh api --method DELETE \
+                "/user/packages/container/${PACKAGE}/versions/${vid}" \
+                || echo "  ⚠ Could not delete ${label}."
+            fi
+          }
+
+          while IFS= read -r v; do
+            image_id=$(echo "$v" | jq -r '.id')
+            digest=$(echo "$v" | jq -r '.name')
+
+            # Derive cosign sig and SLSA attestation tags from the image digest
+            sig_tag="${digest/sha256:/sha256-}.sig"
+            att_tag="${digest/sha256:/sha256-}.att"
+
+            echo "Deleting image: ${digest} (id=${image_id})"
+            if gh api --method DELETE \
+                "/user/packages/container/${PACKAGE}/versions/${image_id}"; then
+              DELETED_IMAGES=$((DELETED_IMAGES + 1))
+              delete_ancillary "$sig_tag" "sig"  && DELETED_SIGS=$((DELETED_SIGS + 1)) || true
+              delete_ancillary "$att_tag" "att"  && DELETED_ATTS=$((DELETED_ATTS + 1)) || true
+            else
+              echo "  ⚠ Could not delete image — skipping sig/att."
+            fi
+
+          done < <(jq -c --arg prefix "$PREFIX" --arg skip "$SKIP_TAG" '
+            select(
               (.metadata.container.tags | length > 0) and
-              (.metadata.container.tags | all(startswith(\"${PREFIX}\")))
-            ) | .id" | \
-          while IFS= read -r version_id; do
-            echo "Deleting version ${version_id} (only has ${PREFIX}* tags)"
-            gh api --method DELETE \
-              "/user/packages/container/${PACKAGE}/versions/${version_id}" \
-              && echo "  Deleted." || echo "  Could not delete — skipping."
-          done
+              (.metadata.container.tags | all(startswith($prefix))) and
+              ($skip == "" or (.metadata.container.tags | contains([$skip]) | not))
+            )
+          ' /tmp/versions.ndjson)
 
-      - name: Delete stale and untagged image versions
-        if: github.event_name == 'push'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PACKAGE="${GITHUB_REPOSITORY##*/}"
-
-          # Delete versions that are either:
-          # (a) untagged — orphaned manifests incl. leftover Cosign .sig entries
-          # (b) tagged only with main-<sha> or sha256-<sha>.sig patterns —
-          #     stale CI builds superseded by a newer push to main
-          #
-          # Protected: any version carrying latest, main, or a vX.Y.Z tag.
-          gh api "/user/packages/container/${PACKAGE}/versions" --paginate \
-            --jq '.[] | select(
-              (.metadata.container.tags | length == 0)
-              or
-              (.metadata.container.tags | length > 0
-                and all(test("^(main-[0-9a-f]+|sha256-[0-9a-f]+\\.sig)$")))
-            ) | .id' | \
-          while IFS= read -r version_id; do
-            echo "Deleting stale version ${version_id}"
-            gh api --method DELETE \
-              "/user/packages/container/${PACKAGE}/versions/${version_id}" \
-              && echo "  Deleted." || echo "  Could not delete — skipping."
-          done
+          echo "Done: ${DELETED_IMAGES} image(s), ${DELETED_SIGS} sig(s), ${DELETED_ATTS} att(s) deleted."
