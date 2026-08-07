@@ -13,10 +13,11 @@ build/
 venv/
 env/
 
-# Local config
+# Local Tools and config
 config.yml
 notes.yml
 .claude
+cleanup-registry.sh
 
 # Editor / OS
 .DS_Store
