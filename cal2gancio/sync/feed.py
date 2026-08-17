@@ -35,10 +35,9 @@ def sync_feed(
         global_text = TextConfig()
 
     print(f"\n→ {feed.url}")
-    disclaimer      = feed.disclaimer      if feed.disclaimer      else global_disclaimer
-    event_link_text = feed.event_link_text if feed.event_link_text else global_text.event_link
+    disclaimer = feed.disclaimer if feed.disclaimer else global_disclaimer
 
-    events = fetch_for_feed(feed, disclaimer, event_link_text, text=global_text)
+    events = fetch_for_feed(feed, disclaimer, text=global_text)
 
     if not events:
         print("  (keine Events nach Filtern)")
@@ -91,10 +90,9 @@ def dry_run_feed(
         global_text = TextConfig()
 
     print(f"\n→ {feed.url}")
-    disclaimer      = feed.disclaimer      if feed.disclaimer      else global_disclaimer
-    event_link_text = feed.event_link_text if feed.event_link_text else global_text.event_link
+    disclaimer = feed.disclaimer if feed.disclaimer else global_disclaimer
 
-    events = fetch_for_feed(feed, disclaimer, event_link_text, text=global_text)
+    events = fetch_for_feed(feed, disclaimer, text=global_text)
 
     if not events:
         print("  (keine Events nach Filtern)")

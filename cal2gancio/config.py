@@ -10,7 +10,6 @@ Config file structure:
       wait: 2.0
 
     text:
-      event_link: "Event details"         # link text for iCal URL field
       cancelled: "Cancelled: "            # prefix for STATUS:CANCELLED events
 
     disclaimer: "<em>Importiert via cal2gancio.</em>"
@@ -107,7 +106,6 @@ class HtmlConfig:
 
 @dataclass
 class TextConfig:
-    event_link: str = "Event details"
     cancelled: str = "Cancelled: "
 
 
@@ -125,7 +123,6 @@ class FeedConfig:
     default_place_address: str = ""
     additional_tags: list[str] = field(default_factory=list)
     disclaimer: str = ""
-    event_link_text: str = ""
     ignore_past_events: bool = True
     delete_cancelled: bool = False
     filter: FilterConfig = field(default_factory=FilterConfig)
@@ -255,7 +252,6 @@ def load(dry_run: bool = False) -> AppConfig:
 
     text_raw = raw.get("text") or {}
     text = TextConfig(
-        event_link=text_raw.get("event_link", "Event details"),
         cancelled=text_raw.get("cancelled", "Cancelled: "),
     )
 
@@ -267,7 +263,6 @@ def load(dry_run: bool = False) -> AppConfig:
             default_place_address=entry.get("default_place_address", ""),
             additional_tags=entry.get("additional_tags") or [],
             disclaimer=entry.get("disclaimer", ""),
-            event_link_text=entry.get("event_link_text", ""),
             ignore_past_events=bool(entry.get("ignore_past_events", True)),
             delete_cancelled=bool(entry.get("delete_cancelled", False)),
             filter=_parse_filter(entry.get("filter") or {}),
