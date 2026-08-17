@@ -18,5 +18,8 @@ def fetch_ical_event(ical_url: str) -> dict | None:
 
     for component in cal.walk():
         if component.name == "VEVENT":
-            return build_event(component)
+            try:
+                return build_event(component)
+            except Exception:
+                return None
     return None

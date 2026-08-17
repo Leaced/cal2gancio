@@ -71,7 +71,10 @@ def build_event(component) -> dict | None:
     if not dtstart:
         return None
 
-    start_ts  = to_timestamp(dtstart)
+    try:
+        start_ts = to_timestamp(dtstart)
+    except Exception:
+        return None
     title     = str(component.get("SUMMARY", "(kein Titel)")).strip()
     cancelled = str(component.get("STATUS", "")).strip().upper() == "CANCELLED"
 
