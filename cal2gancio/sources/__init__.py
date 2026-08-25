@@ -203,7 +203,7 @@ def _apply_description(
         body = event.get("description", "")   # already normalised by _apply_html_normalization
         url  = event.pop("_event_url", "")
         if url:
-            event["url"] = url
+            event["online_locations"] = [url]
         if disclaimer:
             event["description"] = f"{body}{_PARA}{_SEP}{_PARA}{disclaimer}" if body else disclaimer
     return events

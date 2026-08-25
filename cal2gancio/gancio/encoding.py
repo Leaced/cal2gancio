@@ -37,8 +37,10 @@ def to_multipart(data: dict) -> list[tuple]:
     fields = []
     for key, value in data.items():
         if isinstance(value, list):
+            # online_locations uses PHP-style array notation (parsed by qs on the server)
+            field_name = "online_locations[]" if key == "online_locations" else key
             for item in value:
-                fields.append((key, (None, str(item))))
+                fields.append((field_name, (None, str(item))))
         elif value is not None:
             v = _encode_image_url(str(value)) if key == "image_url" else str(value)
             fields.append((key, (None, v)))
