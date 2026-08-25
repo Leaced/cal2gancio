@@ -89,14 +89,13 @@ _FETCHERS: dict[SourceType, FetchFn] = {
 def fetch_for_feed(
     feed: FeedConfig,
     disclaimer: str = "",
-    event_link_text: str = "Event details",
     text: TextConfig | None = None,
 ) -> list[dict]:
     fetcher = _FETCHERS.get(feed.source_type)
     if fetcher is None:
         raise ValueError(f"Unsupported source type: {feed.source_type!r}")
     events = fetcher(feed)
-    return _postprocess(events, feed, text or TextConfig(), disclaimer, event_link_text)
+    return _postprocess(events, feed, text or TextConfig(), disclaimer)
 
 
 def _postprocess(
@@ -104,7 +103,6 @@ def _postprocess(
     feed: FeedConfig,
     text: TextConfig,
     disclaimer: str = "",
-    event_link_text: str = "",
 ) -> list[dict]:
     events = _apply_place_defaults(events, feed)
     events = _apply_additional_tags(events, feed)
@@ -113,7 +111,7 @@ def _postprocess(
     events = _apply_place_validation(events)
     events = _apply_cancelled(events, feed, text)
     events = _apply_html_normalization(events)
-    events = _apply_description(events, event_link_text, disclaimer)
+    events = _apply_description(events, disclaimer)
     events = _apply_content_hash(events)
     return events
 
@@ -199,17 +197,15 @@ def _apply_html_normalization(events: list[dict]) -> list[dict]:
 
 def _apply_description(
     events: list[dict],
-    event_link_text: str,
     disclaimer: str,
 ) -> list[dict]:
     for event in events:
         body = event.get("description", "")   # already normalised by _apply_html_normalization
         url  = event.pop("_event_url", "")
-        link = f'<a href="{url}">{event_link_text}</a>' if (url and event_link_text) else ""
-        extras = [p for p in [link, disclaimer] if p]
-        if extras:
-            block = _PARA.join(extras)
-            event["description"] = f"{body}{_PARA}{_SEP}{_PARA}{block}" if body else block
+        if url:
+            event["online_locations"] = [url]
+        if disclaimer:
+            event["description"] = f"{body}{_PARA}{_SEP}{_PARA}{disclaimer}" if body else disclaimer
     return events
 
 

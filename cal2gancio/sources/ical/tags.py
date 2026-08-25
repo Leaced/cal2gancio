@@ -46,7 +46,7 @@ def content_hash(event: dict) -> str:
     stable = {k: event.get(k) for k in [
         "title", "description", "start_datetime", "multidate",
         "place_name", "place_address", "place_latitude", "place_longitude",
-        "image_url",
+        "image_url", "online_locations",
     ]}
     stable["tags"] = sorted(
         t for t in (event.get("tags") or []) if not is_internal(t)

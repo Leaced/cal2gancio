@@ -30,44 +30,67 @@ jobs:
             echo "PR merged — skipping ${SKIP_TAG} (source for release re-tag)"
           fi
 
-          # Fetch all package versions once
+          # OCI token for fetching cosign index manifests to discover child digests.
+          # Cosign stores signatures as an OCI index tagged sha256-<image-digest>;
+          # each index has one or more untagged child manifests that must be deleted
+          # explicitly — GHCR does not GC children when the parent index is deleted.
+          OCI_TOKEN=$(curl -s -u "x:${GH_TOKEN}" \
+            "https://ghcr.io/token?scope=repository:${GITHUB_REPOSITORY,,}:pull&service=ghcr.io" \
+            | jq -r '.token')
+
+          # Fetch all package versions (tagged and untagged) once
           gh api "/user/packages/container/${PACKAGE}/versions" --paginate \
             | jq -c '.[]' > /tmp/versions.ndjson
 
           DELETED_IMAGES=0
-          DELETED_SIGS=0
-          DELETED_ATTS=0
-
-          delete_ancillary() {
-            local tag="$1" label="$2"
-            local vid
-            vid=$(jq -r --arg t "$tag" \
-              'select(.metadata.container.tags | contains([$t])) | .id' \
-              /tmp/versions.ndjson | head -1)
-            if [[ -n "$vid" ]]; then
-              echo "  Deleting ${label}: ${tag} (id=${vid})"
-              gh api --method DELETE \
-                "/user/packages/container/${PACKAGE}/versions/${vid}" \
-                || echo "  ⚠ Could not delete ${label}."
-            fi
-          }
+          DELETED_COSIGN=0
 
           while IFS= read -r v; do
             image_id=$(echo "$v" | jq -r '.id')
             digest=$(echo "$v" | jq -r '.name')
+            tag=$(echo "$v" | jq -r '.metadata.container.tags[0]')
 
-            # Derive cosign sig and SLSA attestation tags from the image digest
-            sig_tag="${digest/sha256:/sha256-}.sig"
-            att_tag="${digest/sha256:/sha256-}.att"
-
-            echo "Deleting image: ${digest} (id=${image_id})"
+            echo "Deleting image: ${tag} (id=${image_id})"
             if gh api --method DELETE \
                 "/user/packages/container/${PACKAGE}/versions/${image_id}"; then
               DELETED_IMAGES=$((DELETED_IMAGES + 1))
-              delete_ancillary "$sig_tag" "sig"  && DELETED_SIGS=$((DELETED_SIGS + 1)) || true
-              delete_ancillary "$att_tag" "att"  && DELETED_ATTS=$((DELETED_ATTS + 1)) || true
+
+              # Cosign OCI index tag for this image: sha256-<hex> (no .sig/.att suffix)
+              sig_tag="${digest/sha256:/sha256-}"
+              sig_vid=$(jq -r --arg t "$sig_tag" \
+                'select(.metadata.container.tags | contains([$t])) | .id' \
+                /tmp/versions.ndjson | head -1)
+
+              if [[ -n "$sig_vid" ]]; then
+                # Fetch child digests from the cosign index before deleting it
+                mapfile -t children < <(curl -s \
+                  -H "Authorization: Bearer ${OCI_TOKEN}" \
+                  -H "Accept: application/vnd.oci.image.index.v1+json" \
+                  "https://ghcr.io/v2/${GITHUB_REPOSITORY,,}/manifests/${sig_tag}" \
+                  | jq -r '.manifests[]?.digest' 2>/dev/null || true)
+
+                # Delete each untagged child manifest (cosign signature bundle)
+                for child_digest in "${children[@]+"${children[@]}"}"; do
+                  [[ -z "$child_digest" ]] && continue
+                  child_vid=$(jq -r --arg d "$child_digest" \
+                    'select(.name == $d) | .id' \
+                    /tmp/versions.ndjson | head -1)
+                  if [[ -n "$child_vid" ]]; then
+                    echo "  Deleting cosign child: ${child_digest} (id=${child_vid})"
+                    gh api --method DELETE \
+                      "/user/packages/container/${PACKAGE}/versions/${child_vid}" \
+                      || echo "  ⚠ Could not delete cosign child."
+                  fi
+                done
+
+                echo "  Deleting cosign index: ${sig_tag} (id=${sig_vid})"
+                gh api --method DELETE \
+                  "/user/packages/container/${PACKAGE}/versions/${sig_vid}" \
+                  || echo "  ⚠ Could not delete cosign index."
+                DELETED_COSIGN=$((DELETED_COSIGN + 1))
+              fi
             else
-              echo "  ⚠ Could not delete image — skipping sig/att."
+              echo "  ⚠ Could not delete image — skipping cosign artifacts."
             fi
 
           done < <(jq -c --arg prefix "$PREFIX" --arg skip "$SKIP_TAG" '
@@ -78,4 +101,4 @@ jobs:
             )
           ' /tmp/versions.ndjson)
 
-          echo "Done: ${DELETED_IMAGES} image(s), ${DELETED_SIGS} sig(s), ${DELETED_ATTS} att(s) deleted."
+          echo "Done: ${DELETED_IMAGES} image(s), ${DELETED_COSIGN} cosign index(es) deleted."
