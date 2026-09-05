@@ -5,18 +5,15 @@ from datetime import datetime, timezone
 from html import unescape
 from urllib.parse import urljoin, urlparse
 
-import requests
 from bs4 import BeautifulSoup, Tag
 
 from ...config import FieldSelector
+from .. import http
 from ..parse_utils import normalize_month_names
-
-_HEADERS = {"User-Agent": "cal2gancio/1.0 (+https://github.com/Leaced/cal2gancio)"}
 
 
 def fetch_detail(url: str) -> BeautifulSoup:
-    resp = requests.get(url, headers=_HEADERS, timeout=20)
-    resp.raise_for_status()
+    resp = http.get(url, timeout=20)
     return BeautifulSoup(resp.text, "html.parser")
 
 
