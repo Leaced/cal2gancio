@@ -24,7 +24,7 @@ permissions:
 jobs:
   # ── 0. REUSE licence compliance ──────────────────────────────────────────
   reuse:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: fsfe/reuse-action@676e2d560c9a403aa252096d99fcab3e1132b0f5 # v6
@@ -38,7 +38,7 @@ jobs:
   # ── 2. Dry-run release preview ───────────────────────────────────────────
   release-dry-run:
     needs: [build-push-scan]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout (full history for semantic-release)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
