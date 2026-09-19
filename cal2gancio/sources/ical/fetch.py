@@ -6,6 +6,7 @@ import requests
 from icalendar import Calendar
 
 from ...config import FeedConfig
+from .. import http
 from .event   import build_event
 
 
@@ -15,8 +16,7 @@ def fetch_events(feed: FeedConfig) -> list[dict]:
     Returns [] on HTTP or parse errors (error printed to stderr).
     """
     try:
-        resp = requests.get(feed.url, timeout=30)
-        resp.raise_for_status()
+        resp = http.get(feed.url, timeout=30)
     except requests.RequestException as e:
         print(f"  Fehler beim Abrufen von {feed.url}: {e}", file=sys.stderr)
         return []

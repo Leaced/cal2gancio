@@ -3,11 +3,7 @@
   "branches": ["main"],
   "plugins": [
     "@semantic-release/commit-analyzer",
-    ["@semantic-release/release-notes-generator", {
-      "writerOpts": {
-        "footer": "\n\n---\n\n## Container image\n\n```sh\npodman pull ghcr.io/leaced/cal2gancio:v{{version}}\n```\n\nVerify the image signature:\n\n```sh\ncosign verify \\\n  --certificate-identity-regexp \\\n    'https://github.com/Leaced/cal2gancio/.github/workflows/_build-scan.yml@refs/pull/[0-9]+/merge' \\\n  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \\\n  ghcr.io/leaced/cal2gancio:v{{version}}\n```"
-      }
-    }],
+    "@semantic-release/release-notes-generator",
     "@semantic-release/github"
   ]
 }
