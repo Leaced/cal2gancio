@@ -11,11 +11,11 @@
 # Build:  buildah build -t cal2gancio .
 
 # ── Stage 0: strip pip and setuptools from Python ────────────────────────────
-FROM docker.io/python:3.14.7-alpine3.24 AS python-stripped
+FROM docker.io/python:3.14.8-alpine3.24 AS python-stripped
 RUN pip uninstall -y setuptools pip
 
 # ── Stage 1: dependency installation ────────────────────────────────────────
-FROM docker.io/python:3.14.7-slim AS builder
+FROM docker.io/python:3.14.8-slim AS builder
 
 WORKDIR /install
 
