@@ -1,10 +1,9 @@
 """Fetches a listing page and extracts event detail URLs via a CSS selector."""
 
-import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
-_HEADERS = {"User-Agent": "cal2gancio/1.0 (+https://github.com/Leaced/cal2gancio)"}
+from .. import http
 
 
 def discover_event_urls(
@@ -17,8 +16,7 @@ def discover_event_urls(
     event_id is the value of event_id_attribute on the link element, or None
     when event_id_attribute is not configured.
     """
-    resp = requests.get(listing_url, headers=_HEADERS, timeout=20)
-    resp.raise_for_status()
+    resp = http.get(listing_url, timeout=20)
     soup = BeautifulSoup(resp.text, "html.parser")
 
     seen: set[str] = set()
